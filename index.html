@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Textual Vision · C64 Ideation Canvas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --c64-bg: #40318d;
+        --c64-panel: #40318d;
+        --c64-border: #7869c4;
+        --c64-heading: #a4a0c4;
+        --c64-text: #7869c4;
+        --c64-input: #3a2a7a;
+        --c64-input-text: #ffffff;
+      }
+
+      * {
+        font-family: monospace !important;
+      }
+
+      body {
+        margin: 0;
+        background: var(--c64-bg);
+        color: var(--c64-text);
+      }
+
+      .card {
+        background: var(--c64-panel);
+        border: 3px solid var(--c64-border);
+        border-radius: 0;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4,
+      label,
+      .heading {
+        color: var(--c64-heading);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .panel {
+        background: var(--c64-panel);
+        border: 1px solid var(--c64-border);
+      }
+
+      .c64-input,
+      .c64-textarea,
+      .c64-file {
+        width: 100%;
+        background: var(--c64-input);
+        border: 1px solid var(--c64-border);
+        color: var(--c64-input-text);
+        border-radius: 0;
+        padding: 0.45rem 0.5rem;
+      }
+
+      .c64-textarea {
+        min-height: 13rem;
+        resize: vertical;
+      }
+
+      .c64-button {
+        background: var(--c64-border);
+        border: 2px solid var(--c64-heading);
+        border-radius: 0;
+        color: var(--c64-bg);
+        text-transform: uppercase;
+        font-weight: bold;
+        cursor: pointer;
+        transition: transform 0.1s ease, box-shadow 0.1s ease;
+        box-shadow: 3px 3px 0 #1d1456;
+        padding: 0.45rem 0.6rem;
+      }
+
+      .c64-button:hover {
+        transform: translate(-1px, -1px);
+      }
+
+      .c64-button:active,
+      .c64-button.active {
+        transform: translate(1px, 1px) scale(0.98);
+        box-shadow: 1px 1px 0 #1d1456;
+      }
+
+      .viewport {
+        overflow: hidden;
+        position: relative;
+        min-height: 70vh;
+      }
+
+      .canvas-root {
+        position: absolute;
+        left: 0;
+        top: 0;
+        transform-origin: 0 0;
+        user-select: none;
+      }
+
+      .canvas-grid {
+        display: grid;
+        grid-template-columns: 40px repeat(16, 40px);
+        grid-template-rows: 40px repeat(16, 40px);
+      }
+
+      .axis,
+      .corner,
+      .cell {
+        border: 1px solid var(--c64-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .axis,
+      .corner {
+        color: var(--c64-heading);
+        background: #37267d;
+      }
+
+      .cell {
+        background: transparent;
+        color: #fff;
+        transition: box-shadow 0.1s ease, background-color 0.1s ease;
+        font-size: 0.75rem;
+      }
+
+      .cell.occupied {
+        background: rgba(164, 160, 196, 0.25);
+      }
+
+      .cell.hover-highlight {
+        box-shadow: inset 0 0 0 2px var(--c64-heading);
+      }
+
+      .cell.preview {
+        background: rgba(120, 105, 196, 0.45);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="h-screen flex flex-col">
+      <header class="sticky top-0 z-10 card p-3 m-3 mb-2">
+        <h1 class="text-lg">Visual-To-Text Ideation Canvas · C64 Mode</h1>
+        <p class="text-xs mt-1">Draw rectangular layout blocks, pan/zoom the viewport, and export ASCII + JSON + YAML.</p>
+      </header>
+
+      <main class="flex-1 grid grid-cols-1 lg:grid-cols-[270px_1fr_360px] gap-3 px-3 pb-3 min-h-0">
+        <aside class="card p-3 space-y-3 overflow-auto">
+          <h2 class="text-sm">Tools</h2>
+
+          <div class="space-y-1">
+            <label for="labelInput" class="text-xs block">Element Label</label>
+            <input id="labelInput" class="c64-input" type="text" value="NAV BAR" maxlength="40" />
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button id="drawToolBtn" class="c64-button active" type="button">Draw</button>
+            <button id="eraseToolBtn" class="c64-button" type="button">Erase</button>
+          </div>
+
+          <button id="clearCanvasBtn" class="c64-button w-full" type="button">Clear Canvas</button>
+
+          <div class="panel p-2 text-xs leading-relaxed">
+            <p>Pan: middle mouse drag OR hold Space + left drag</p>
+            <p>Zoom: mouse wheel in viewport</p>
+          </div>
+        </aside>
+
+        <section class="card p-2 min-h-0">
+          <div id="viewport" class="viewport panel h-full">
+            <div id="canvasRoot" class="canvas-root">
+              <div id="grid" class="canvas-grid"></div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="card p-3 space-y-3 overflow-auto">
+          <h2 class="text-sm">Storage & Export</h2>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button id="saveYamlBtn" class="c64-button" type="button">Save As YAML</button>
+            <label class="c64-button text-center" for="openYamlInput">Open File</label>
+          </div>
+          <input id="openYamlInput" class="hidden" type="file" accept=".yaml,.yml" />
+
+          <div class="space-y-1">
+            <h3 class="text-xs">ASCII Art Grid Map</h3>
+            <textarea id="asciiOutput" class="c64-textarea" readonly></textarea>
+          </div>
+
+          <div class="space-y-1">
+            <h3 class="text-xs">Structured JSON Matrix</h3>
+            <textarea id="jsonOutput" class="c64-textarea" readonly></textarea>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <script>
+      (() => {
+        const COLS = 16;
+        const ROWS = 16;
+        const colLabels = Array.from({ length: COLS }, (_, i) => String.fromCharCode(65 + i));
+
+        const gridEl = document.getElementById('grid');
+        const viewportEl = document.getElementById('viewport');
+        const canvasRootEl = document.getElementById('canvasRoot');
+        const drawBtn = document.getElementById('drawToolBtn');
+        const eraseBtn = document.getElementById('eraseToolBtn');
+        const clearBtn = document.getElementById('clearCanvasBtn');
+        const labelInput = document.getElementById('labelInput');
+        const saveYamlBtn = document.getElementById('saveYamlBtn');
+        const openYamlInput = document.getElementById('openYamlInput');
+        const asciiOutput = document.getElementById('asciiOutput');
+        const jsonOutput = document.getElementById('jsonOutput');
+
+        const state = {
+          mode: 'draw',
+          elements: [],
+          panX: 120,
+          panY: 80,
+          zoom: 1,
+          hoveredCell: null,
+          drawingStart: null,
+          drawingEnd: null,
+          isMouseDrawing: false,
+          isPanning: false,
+          panPointerId: null,
+          spacePressed: false,
+          panStartMouseX: 0,
+          panStartMouseY: 0,
+          panOriginX: 0,
+          panOriginY: 0
+        };
+
+        function normalizeRect(a, b) {
+          return {
+            startRow: Math.min(a.row, b.row),
+            endRow: Math.max(a.row, b.row),
+            startCol: Math.min(a.col, b.col),
+            endCol: Math.max(a.col, b.col)
+          };
+        }
+
+        function sanitizeLabel(label) {
+          const cleaned = String(label || '').replace(/[^A-Za-z0-9 ]+/g, ' ').trim();
+          return cleaned || 'BLOCK';
+        }
+
+        function getCodeBase(label) {
+          const letters = sanitizeLabel(label).toUpperCase().replace(/[^A-Z]/g, '');
+          if (letters.length >= 2) return letters.slice(0, 2);
+          if (letters.length === 1) return `${letters}X`;
+          return 'BL';
+        }
+
+        function codeExists(code) {
+          return state.elements.some((e) => e.code === code);
+        }
+
+        function generateUniqueCode(label) {
+          const base = getCodeBase(label);
+          if (!codeExists(base)) return base;
+
+          for (let i = 0; i < 26; i += 1) {
+            const candidate = `${base[0]}${String.fromCharCode(65 + i)}`;
+            if (!codeExists(candidate)) return candidate;
+          }
+
+          for (let i = 0; i < 26; i += 1) {
+            for (let j = 0; j < 26; j += 1) {
+              const candidate = `${String.fromCharCode(65 + i)}${String.fromCharCode(65 + j)}`;
+              if (!codeExists(candidate)) return candidate;
+            }
+          }
+
+          return base;
+        }
+
+        function buildOccupancyMatrix() {
+          const matrix = Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => '.'));
+          state.elements.forEach((element) => {
+            for (let row = element.startRow; row <= element.endRow; row += 1) {
+              for (let col = element.startCol; col <= element.endCol; col += 1) {
+                matrix[row - 1][col - 1] = element.code;
+              }
+            }
+          });
+          return matrix;
+        }
+
+        function previewSet() {
+          if (!state.isMouseDrawing || !state.drawingStart || !state.drawingEnd) return new Set();
+          const rect = normalizeRect(state.drawingStart, state.drawingEnd);
+          const set = new Set();
+          for (let row = rect.startRow; row <= rect.endRow; row += 1) {
+            for (let col = rect.startCol; col <= rect.endCol; col += 1) {
+              set.add(`${row}-${col}`);
+            }
+          }
+          return set;
+        }
+
+        function formatAscii(matrix) {
+          const colHeader = `    ${colLabels.map((c) => c.padEnd(4, ' ')).join('')}`;
+          const lines = matrix.map((rowCells, rowIndex) => {
+            const rowLabel = String(rowIndex + 1).padStart(2, '0');
+            const rowText = rowCells
+              .map((cell) => (cell === '.' ? ' .  ' : `[${cell}]`))
+              .join('');
+            return `${rowLabel}  ${rowText}`;
+          });
+          return ['```text', colHeader, ...lines, '```'].join('\n');
+        }
+
+        function formatJson(matrix) {
+          return [
+            '```json',
+            JSON.stringify(
+              {
+                rows: ROWS,
+                cols: COLS,
+                columns: colLabels,
+                matrix,
+                elements: state.elements
+              },
+              null,
+              2
+            ),
+            '```'
+          ].join('\n');
+        }
+
+        function updateExports() {
+          const matrix = buildOccupancyMatrix();
+          asciiOutput.value = formatAscii(matrix);
+          jsonOutput.value = formatJson(matrix);
+        }
+
+        function rerender() {
+          const occupancy = buildOccupancyMatrix();
+          const previews = previewSet();
+          const hovered = state.hoveredCell ? `${state.hoveredCell.row}-${state.hoveredCell.col}` : null;
+
+          const cells = gridEl.querySelectorAll('.cell');
+          cells.forEach((cellEl) => {
+            const row = Number(cellEl.dataset.row);
+            const col = Number(cellEl.dataset.col);
+            const key = `${row}-${col}`;
+            const code = occupancy[row - 1][col - 1];
+
+            cellEl.textContent = code === '.' ? '' : code;
+            cellEl.classList.toggle('occupied', code !== '.');
+            cellEl.classList.toggle('hover-highlight', state.mode === 'draw' && hovered === key);
+            cellEl.classList.toggle('preview', previews.has(key));
+          });
+
+          updateExports();
+          canvasRootEl.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
+          drawBtn.classList.toggle('active', state.mode === 'draw');
+          eraseBtn.classList.toggle('active', state.mode === 'erase');
+          viewportEl.style.cursor = state.isPanning ? 'grabbing' : state.mode === 'erase' ? 'not-allowed' : 'crosshair';
+        }
+
+        function setupGrid() {
+          const frag = document.createDocumentFragment();
+
+          const corner = document.createElement('div');
+          corner.className = 'corner';
+          corner.textContent = '#';
+          frag.appendChild(corner);
+
+          for (let col = 1; col <= COLS; col += 1) {
+            const axis = document.createElement('div');
+            axis.className = 'axis';
+            axis.textContent = colLabels[col - 1];
+            frag.appendChild(axis);
+          }
+
+          for (let row = 1; row <= ROWS; row += 1) {
+            const axis = document.createElement('div');
+            axis.className = 'axis';
+            axis.textContent = row;
+            frag.appendChild(axis);
+
+            for (let col = 1; col <= COLS; col += 1) {
+              const cell = document.createElement('div');
+              cell.className = 'cell';
+              cell.dataset.row = String(row);
+              cell.dataset.col = String(col);
+              frag.appendChild(cell);
+            }
+          }
+
+          gridEl.appendChild(frag);
+        }
+
+        function findContainingElementIndex(row, col) {
+          for (let i = state.elements.length - 1; i >= 0; i -= 1) {
+            const element = state.elements[i];
+            if (
+              row >= element.startRow &&
+              row <= element.endRow &&
+              col >= element.startCol &&
+              col <= element.endCol
+            ) {
+              return i;
+            }
+          }
+          return -1;
+        }
+
+        function onCellPointerDown(event, row, col) {
+          if (event.button !== 0) return;
+          if (state.spacePressed) {
+            startPan(event);
+            return;
+          }
+          if (state.mode === 'erase') {
+            const idx = findContainingElementIndex(row, col);
+            if (idx !== -1) {
+              state.elements.splice(idx, 1);
+              rerender();
+            }
+            return;
+          }
+
+          state.isMouseDrawing = true;
+          state.drawingStart = { row, col };
+          state.drawingEnd = { row, col };
+          rerender();
+        }
+
+        function onCellPointerEnter(row, col) {
+          state.hoveredCell = { row, col };
+          if (state.isMouseDrawing) {
+            state.drawingEnd = { row, col };
+          }
+          rerender();
+        }
+
+        function onPointerUpAnywhere() {
+          if (state.isMouseDrawing && state.drawingStart && state.drawingEnd) {
+            const rect = normalizeRect(state.drawingStart, state.drawingEnd);
+            state.elements.push({
+              id: crypto.randomUUID(),
+              label: sanitizeLabel(labelInput.value),
+              code: generateUniqueCode(labelInput.value),
+              ...rect
+            });
+          }
+
+          state.isMouseDrawing = false;
+          state.drawingStart = null;
+          state.drawingEnd = null;
+
+          if (state.isPanning) {
+            state.isPanning = false;
+            state.panPointerId = null;
+          }
+
+          rerender();
+        }
+
+        function startPan(event) {
+          state.isPanning = true;
+          state.panPointerId = event.pointerId || null;
+          state.panStartMouseX = event.clientX;
+          state.panStartMouseY = event.clientY;
+          state.panOriginX = state.panX;
+          state.panOriginY = state.panY;
+          rerender();
+        }
+
+        function onViewportPointerDown(event) {
+          const isMiddleButton = event.button === 1;
+          const spaceLeft = state.spacePressed && event.button === 0;
+          if (!isMiddleButton && !spaceLeft) return;
+
+          event.preventDefault();
+          startPan(event);
+        }
+
+        function onViewportPointerMove(event) {
+          if (!state.isPanning) return;
+          if (state.panPointerId !== null && event.pointerId !== state.panPointerId) return;
+
+          state.panX = state.panOriginX + (event.clientX - state.panStartMouseX);
+          state.panY = state.panOriginY + (event.clientY - state.panStartMouseY);
+          rerender();
+        }
+
+        function onViewportWheel(event) {
+          event.preventDefault();
+
+          const rect = viewportEl.getBoundingClientRect();
+          const pointerX = event.clientX - rect.left;
+          const pointerY = event.clientY - rect.top;
+
+          const prevZoom = state.zoom;
+          const delta = -event.deltaY;
+          const factor = delta > 0 ? 1.1 : 0.9;
+          const nextZoom = Math.min(4, Math.max(0.4, prevZoom * factor));
+          if (nextZoom === prevZoom) return;
+
+          const worldX = (pointerX - state.panX) / prevZoom;
+          const worldY = (pointerY - state.panY) / prevZoom;
+
+          state.zoom = nextZoom;
+          state.panX = pointerX - worldX * nextZoom;
+          state.panY = pointerY - worldY * nextZoom;
+
+          rerender();
+        }
+
+        function yamlScalar(value) {
+          if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+          if (value === null || value === undefined) return 'null';
+          const text = String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+          return `"${text}"`;
+        }
+
+        function stringifyYaml(value, indent = 0) {
+          const pad = ' '.repeat(indent);
+          if (Array.isArray(value)) {
+            return value
+              .map((item) => {
+                if (item && typeof item === 'object') {
+                  return `${pad}-\n${stringifyYaml(item, indent + 2)}`;
+                }
+                return `${pad}- ${yamlScalar(item)}`;
+              })
+              .join('\n');
+          }
+          if (value && typeof value === 'object') {
+            return Object.entries(value)
+              .map(([key, v]) => {
+                if (v && typeof v === 'object') {
+                  return `${pad}${key}:\n${stringifyYaml(v, indent + 2)}`;
+                }
+                return `${pad}${key}: ${yamlScalar(v)}`;
+              })
+              .join('\n');
+          }
+          return `${pad}${yamlScalar(value)}`;
+        }
+
+        function parseYamlScalar(value) {
+          const trimmed = value.trim();
+          if (trimmed === 'null') return null;
+          if (trimmed === 'true') return true;
+          if (trimmed === 'false') return false;
+          if (/^-?\\d+(\\.\\d+)?$/.test(trimmed)) return Number(trimmed);
+          if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+            return trimmed.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+          }
+          return trimmed;
+        }
+
+        function parseSimpleYaml(text) {
+          const lines = text
+            .split('\n')
+            .map((line) => line.replace(/\t/g, '  '))
+            .filter((line) => line.trim() && !line.trim().startsWith('#'));
+
+          function lineIndent(line) {
+            return line.match(/^ */)[0].length;
+          }
+
+          function parseBlock(startIndex, indent) {
+            if (startIndex >= lines.length) return [null, startIndex];
+            const sequence = lines[startIndex].trim().startsWith('-');
+            const container = sequence ? [] : {};
+            let i = startIndex;
+
+            while (i < lines.length) {
+              const line = lines[i];
+              const currentIndent = lineIndent(line);
+              if (currentIndent < indent) break;
+              if (currentIndent > indent) throw new Error('Invalid YAML indentation.');
+
+              const trimmed = line.trim();
+              if (sequence) {
+                if (!trimmed.startsWith('-')) break;
+                const payload = trimmed.slice(1).trim();
+                if (!payload) {
+                  const [nested, nextIndex] = parseBlock(i + 1, indent + 2);
+                  container.push(nested);
+                  i = nextIndex;
+                  continue;
+                }
+                if (payload.includes(':')) {
+                  const [firstKey, ...rest] = payload.split(':');
+                  const firstVal = rest.join(':').trim();
+                  const item = {};
+                  if (firstVal) item[firstKey.trim()] = parseYamlScalar(firstVal);
+                  i += 1;
+                  while (i < lines.length) {
+                    const nextLine = lines[i];
+                    const nextIndent = lineIndent(nextLine);
+                    if (nextIndent < indent + 2) break;
+                    if (nextIndent > indent + 2) throw new Error('Invalid YAML indentation.');
+                    const nextTrimmed = nextLine.trim();
+                    if (nextTrimmed.startsWith('- ')) break;
+                    const [k, ...r] = nextTrimmed.split(':');
+                    const v = r.join(':').trim();
+                    if (v) {
+                      item[k.trim()] = parseYamlScalar(v);
+                      i += 1;
+                    } else {
+                      const [nested, nextIndex] = parseBlock(i + 1, indent + 4);
+                      item[k.trim()] = nested;
+                      i = nextIndex;
+                    }
+                  }
+                  container.push(item);
+                  continue;
+                }
+                container.push(parseYamlScalar(payload));
+                i += 1;
+                continue;
+              }
+
+              const [key, ...rest] = trimmed.split(':');
+              const remainder = rest.join(':').trim();
+              if (remainder) {
+                container[key.trim()] = parseYamlScalar(remainder);
+                i += 1;
+                continue;
+              }
+              const [nested, nextIndex] = parseBlock(i + 1, indent + 2);
+              container[key.trim()] = nested;
+              i = nextIndex;
+            }
+
+            return [container, i];
+          }
+
+          const [parsed] = parseBlock(0, 0);
+          return parsed;
+        }
+
+        function serializeStateToYaml() {
+          const payload = {
+            canvas: {
+              rows: ROWS,
+              cols: COLS,
+              columns: colLabels,
+              transform: {
+                panX: state.panX,
+                panY: state.panY,
+                zoom: state.zoom
+              }
+            },
+            ui: {
+              mode: state.mode,
+              activeLabel: sanitizeLabel(labelInput.value)
+            },
+            elements: state.elements
+          };
+
+          return stringifyYaml(payload);
+        }
+
+        function downloadYaml() {
+          const yamlText = serializeStateToYaml();
+          const blob = new Blob([yamlText], { type: 'text/yaml;charset=utf-8' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = 'c64-layout.yaml';
+          link.click();
+          setTimeout(() => URL.revokeObjectURL(link.href), 250);
+        }
+
+        function applyLoadedState(payload) {
+          if (!payload || typeof payload !== 'object') {
+            throw new Error('Invalid YAML structure.');
+          }
+
+          const elements = Array.isArray(payload.elements) ? payload.elements : [];
+          state.elements = elements
+            .map((item) => ({
+              id: item.id || crypto.randomUUID(),
+              label: sanitizeLabel(item.label),
+              code: String(item.code || '').toUpperCase().slice(0, 2),
+              startRow: Number(item.startRow),
+              endRow: Number(item.endRow),
+              startCol: Number(item.startCol),
+              endCol: Number(item.endCol)
+            }))
+            .filter((item) => {
+              return (
+                item.code.length === 2 &&
+                Number.isInteger(item.startRow) &&
+                Number.isInteger(item.endRow) &&
+                Number.isInteger(item.startCol) &&
+                Number.isInteger(item.endCol) &&
+                item.startRow >= 1 &&
+                item.endRow <= ROWS &&
+                item.startCol >= 1 &&
+                item.endCol <= COLS &&
+                item.startRow <= item.endRow &&
+                item.startCol <= item.endCol
+              );
+            });
+
+          const transform = payload.canvas?.transform || {};
+          state.panX = Number.isFinite(transform.panX) ? transform.panX : 120;
+          state.panY = Number.isFinite(transform.panY) ? transform.panY : 80;
+          state.zoom = Number.isFinite(transform.zoom) ? Math.min(4, Math.max(0.4, transform.zoom)) : 1;
+          state.mode = payload.ui?.mode === 'erase' ? 'erase' : 'draw';
+
+          if (typeof payload.ui?.activeLabel === 'string') {
+            labelInput.value = payload.ui.activeLabel;
+          }
+
+          state.isMouseDrawing = false;
+          state.drawingStart = null;
+          state.drawingEnd = null;
+
+          rerender();
+        }
+
+        saveYamlBtn.addEventListener('click', downloadYaml);
+
+        openYamlInput.addEventListener('change', async (event) => {
+          const file = event.target.files?.[0];
+          if (!file) return;
+          try {
+            const text = await file.text();
+            const parsed = parseSimpleYaml(text);
+            applyLoadedState(parsed);
+          } catch (error) {
+            alert(`Unable to load YAML: ${error.message}`);
+          } finally {
+            openYamlInput.value = '';
+          }
+        });
+
+        drawBtn.addEventListener('click', () => {
+          state.mode = 'draw';
+          rerender();
+        });
+
+        eraseBtn.addEventListener('click', () => {
+          state.mode = 'erase';
+          rerender();
+        });
+
+        clearBtn.addEventListener('click', () => {
+          state.elements = [];
+          state.isMouseDrawing = false;
+          state.drawingStart = null;
+          state.drawingEnd = null;
+          rerender();
+        });
+
+        viewportEl.addEventListener('wheel', onViewportWheel, { passive: false });
+        viewportEl.addEventListener('pointerdown', onViewportPointerDown);
+        viewportEl.addEventListener('pointermove', onViewportPointerMove);
+        window.addEventListener('pointerup', onPointerUpAnywhere);
+
+        window.addEventListener('keydown', (event) => {
+          if (event.code === 'Space') {
+            state.spacePressed = true;
+            if (!state.isPanning) viewportEl.style.cursor = 'grab';
+            if (event.target === document.body) {
+              event.preventDefault();
+            }
+          }
+        });
+
+        window.addEventListener('keyup', (event) => {
+          if (event.code === 'Space') {
+            state.spacePressed = false;
+            rerender();
+          }
+        });
+
+        gridEl.addEventListener('pointerdown', (event) => {
+          const cell = event.target.closest('.cell');
+          if (!cell) return;
+          onCellPointerDown(event, Number(cell.dataset.row), Number(cell.dataset.col));
+        });
+
+        gridEl.addEventListener('pointerover', (event) => {
+          const cell = event.target.closest('.cell');
+          if (!cell) return;
+          onCellPointerEnter(Number(cell.dataset.row), Number(cell.dataset.col));
+        });
+
+        gridEl.addEventListener('pointerleave', (event) => {
+          if (!event.relatedTarget || !gridEl.contains(event.relatedTarget)) {
+            state.hoveredCell = null;
+            rerender();
+          }
+        });
+
+        setupGrid();
+        rerender();
+      })();
+    </script>
+  </body>
+</html>
