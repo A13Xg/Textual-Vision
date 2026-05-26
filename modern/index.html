@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Textual Vision · C64 Ideation Canvas</title>
+    <title>Textual Vision · Modern Cubism Canvas</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       :root {
@@ -366,14 +366,63 @@
         border: 1px solid #1ab8b8;
         color: #f5c842;
       }
+
+      /* Apply cubism styles to buttons and elements when cubism theme is active */
+      .cubism .c64-button {
+        background: #e86a2e;
+        clip-path: polygon(0 0, 100% 0, 94% 100%, 6% 100%);
+        color: #fff;
+        border: none;
+        box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3);
+      }
+
+      .cubism .c64-button:hover {
+        filter: brightness(1.1);
+        transform: translateY(-2px);
+        box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.3);
+      }
+
+      .cubism .c64-button:active,
+      .cubism .c64-button.active {
+        transform: translateY(0);
+        filter: brightness(1.2);
+        box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
+      }
+
+      .cubism .card {
+        background: rgba(26, 46, 80, 0.8);
+        border: 2px solid #1ab8b8;
+        clip-path: polygon(0 0, 98% 0, 100% 5%, 100% 100%, 2% 100%, 0 95%);
+      }
+
+      .cubism .panel {
+        background: rgba(26, 128, 128, 0.28);
+        border-left: 4px solid #1ab8b8;
+      }
+
+      .cubism .c64-input,
+      .cubism .c64-textarea {
+        background: rgba(26, 46, 80, 0.6);
+        border: 2px solid #1ab8b8;
+        color: #a8cce0;
+      }
+
+      .cubism h1,
+      .cubism h2,
+      .cubism h3,
+      .cubism h4,
+      .cubism label,
+      .cubism .heading {
+        color: #f5c842;
+      }
     </style>
   </head>
-  <body>
+  <body class="cubism">
     <div class="h-screen flex flex-col">
       <header class="sticky top-0 z-10 card p-3 m-3 mb-2">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 class="text-lg">Visual-To-Text Ideation Canvas · C64 Mode</h1>
+            <h1 class="text-lg">Visual-To-Text Ideation Canvas · Modern Mode</h1>
             <p class="text-xs mt-1">Draw rectangular layout blocks, pan/zoom the viewport, and export ASCII + JSON + YAML.</p>
           </div>
           <div class="text-xs status-line heading sm:text-right">

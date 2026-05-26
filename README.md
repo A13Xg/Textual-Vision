@@ -3,7 +3,10 @@ Textual Vision is intended to be used as a quick and token efficient way to pass
 
 ## GitHub Pages Static App
 
-This repository now ships a single-file static prototype at `/index.html` for a **C64-themed Visual-to-Text Ideation Canvas**.
+This repository ships a single-file static prototype (no build step) with two theme variants:
+
+- **Retro (C64)**: `/` or `/retro/`
+- **Modern (Cubism)**: `/modern/`
 
 - The app runs entirely in-browser (no backend required).
 - A Pages deploy workflow is included at `.github/workflows/deploy-pages.yml`.
@@ -16,12 +19,18 @@ Once enabled, pushes to `main` will deploy the static web app.
 Open `/index.html` in a browser (or serve the repo locally with something like `python -m http.server`).
 
 ### Core Workflow
-- Pick a label and color, then **Draw** rectangles on the grid to create layout blocks.
-- Click an existing block to **select** it and edit its label/code/color, duplicate it, or delete it.
+- Pick an **object type**, enter a **non-empty title**, pick a color, then **Draw** rectangles on the grid to create layout blocks.
+- The title field is validated when drawing; empty titles are blocked with an inline error state.
+- Click an existing block to **select** it and edit its title/code/color, duplicate it, delete it, or attach notes.
 - Use **Ctrl/Cmd + Click** to select multiple elements for batch operations.
 - Toggle **Allow Overlap** to permit stacked blocks (otherwise overlaps are blocked).
 - When overlaps are enabled, use **Bring Front** / **Send Back** to control stacking order.
 - Tip: `Alt` + click cycles through stacked elements under the cursor.
+
+### Mouse Tools
+- Use **Drag Element** and **Resize Element** tools for mouse-driven adjustments (with a ghost outline preview).
+- Tip: `Esc` closes open modals/context menus, or cancels the current interaction.
+- Most interactive controls include hover tooltips describing shortcuts and expected behavior.
 
 ### Visual Customization
 - **Color Picker**: Choose from 9 predefined colors to visually distinguish different layout blocks.
@@ -38,6 +47,14 @@ Open `/index.html` in a browser (or serve the repo locally with something like `
   - **Align ↓**: Align bottom edges
   - **⊟ Middle**: Center vertically
 - Perfect for quickly organizing and aligning multiple blocks.
+- Use **Merge to Same Object** to combine multiple selected blocks into one bounding-box element.
+
+### Context Menu & Notes
+- Right-click on a selected element to open a context menu with:
+  - Add Note, Duplicate, Delete
+  - Bring to Front, Send to Back
+  - Alignment actions (for multi-select)
+- Notes are saved with each element and persisted in YAML/local autosave state.
 
 ### Navigation
 - Pan: middle mouse drag, or hold `Space` + left-drag
@@ -78,6 +95,15 @@ Open `/index.html` in a browser (or serve the repo locally with something like `
 ### Help System
 - Press `H` or `?` (or click the **Help** button) to open an interactive keyboard shortcuts reference.
 - The help modal provides a comprehensive guide to all features and shortcuts.
+
+### Themes & Settings
+- Use the **Settings** gear to switch between Retro and Modern themes.
+- Theme preference is saved in `localStorage` and is honored when loading the app root.
+- Routing supports `/retro/` and `/modern/`, while `/` defaults to Retro unless a saved Modern preference exists.
+
+### Logging
+- Open **Settings → Show Logs** to view timestamped application logs (info/warn/error).
+- Use **Clear Logs** to reset the in-memory log stream and **Export Logs** to download a `.log` file.
 
 ## Notes
 
