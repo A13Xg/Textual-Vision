@@ -170,6 +170,40 @@
       .status-line {
         min-height: 1rem;
       }
+
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        z-index: 999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+      }
+
+      .modal-content {
+        max-width: 600px;
+        max-height: 90vh;
+        overflow-y: auto;
+        width: 100%;
+      }
+
+      .color-swatch {
+        width: 24px;
+        height: 24px;
+        border: 2px solid var(--c64-border);
+        cursor: pointer;
+        transition: transform 0.1s ease;
+      }
+
+      .color-swatch:hover {
+        transform: scale(1.1);
+      }
+
+      .color-swatch.selected {
+        box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--c64-heading);
+      }
     </style>
   </head>
   <body>
@@ -194,6 +228,11 @@
           <div class="space-y-1">
             <label for="labelInput" class="text-xs block">Element Label</label>
             <input id="labelInput" class="c64-input" type="text" value="NAV BAR" maxlength="40" />
+          </div>
+
+          <div class="space-y-1">
+            <label class="text-xs block">Element Color</label>
+            <div id="colorPicker" class="flex gap-2 flex-wrap"></div>
           </div>
 
           <div class="grid grid-cols-2 gap-2">
@@ -238,6 +277,10 @@
                 <input id="selectedCodeInput" class="c64-input" type="text" placeholder="--" maxlength="2" disabled />
               </div>
               <div class="space-y-1">
+                <label for="selectedColorInput" class="text-xs block">Color</label>
+                <input id="selectedColorInput" class="c64-input" type="color" disabled />
+              </div>
+              <div class="space-y-1 col-span-2">
                 <label class="text-xs block">Bounds</label>
                 <div id="selectedBounds" class="c64-input opacity-80 select-text">--</div>
               </div>
@@ -248,13 +291,21 @@
               <button id="sendBackBtn" class="c64-button" type="button" disabled>Send Back</button>
               <button id="bringFrontBtn" class="c64-button" type="button" disabled>Bring Front</button>
             </div>
+            <div id="alignmentTools" class="grid grid-cols-3 gap-2" style="display: none;">
+              <button id="alignLeftBtn" class="c64-button text-xs" type="button">← Align</button>
+              <button id="alignCenterBtn" class="c64-button text-xs" type="button">⊞ Center</button>
+              <button id="alignRightBtn" class="c64-button text-xs" type="button">Align →</button>
+              <button id="alignTopBtn" class="c64-button text-xs" type="button">↑ Align</button>
+              <button id="alignMiddleBtn" class="c64-button text-xs" type="button">⊟ Middle</button>
+              <button id="alignBottomBtn" class="c64-button text-xs" type="button">Align ↓</button>
+            </div>
           </div>
 
           <div class="panel p-2 text-xs leading-relaxed">
             <p>Pan: middle mouse drag OR hold Space + left drag</p>
             <p>Zoom: mouse wheel in viewport</p>
-            <p>Select: click a block (Alt+click cycles overlaps; Shift starts draw on occupied cells)</p>
-            <p>Shortcuts: D · E · F (focus) · Esc · Del · Ctrl/Cmd+Z · Ctrl+Y</p>
+            <p>Select: click a block (Alt+click cycles overlaps; Ctrl+click multi-select; Shift starts draw on occupied cells)</p>
+            <p>Shortcuts: D · E · F (focus) · H (help) · Esc · Del · Ctrl/Cmd+Z · Ctrl+Y</p>
             <p>Nudge: Arrow keys (Shift = 5) · Resize: Alt+Arrow (Shift = 5)</p>
           </div>
         </aside>
@@ -273,6 +324,8 @@
           <div class="grid grid-cols-2 gap-2">
             <button id="saveYamlBtn" class="c64-button" type="button">Save As YAML</button>
             <label class="c64-button text-center" for="openYamlInput">Open File</label>
+            <button id="exportPngBtn" class="c64-button" type="button">Export PNG</button>
+            <button id="helpBtn" class="c64-button" type="button">Help</button>
           </div>
           <input id="openYamlInput" class="hidden" type="file" accept=".yaml,.yml" />
 
@@ -291,6 +344,7 @@
               <div class="heading">Elements</div>
               <div id="elementsCount" class="opacity-80"></div>
             </div>
+            <input id="elementSearchInput" class="c64-input" type="text" placeholder="Search elements..." />
             <div id="elementsList" class="space-y-1"></div>
           </div>
 
@@ -315,6 +369,53 @@
       </main>
     </div>
 
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal-backdrop" style="display: none;">
+      <div class="modal-content card p-4">
+        <div class="flex items-start justify-between mb-3">
+          <h2 class="text-base">Keyboard Shortcuts & Help</h2>
+          <button id="closeHelpBtn" class="c64-button">×</button>
+        </div>
+        <div class="space-y-3 text-xs">
+          <div>
+            <h3 class="heading mb-2">Drawing & Editing</h3>
+            <p><strong>D</strong> - Switch to Draw mode</p>
+            <p><strong>E</strong> - Switch to Erase mode</p>
+            <p><strong>Click & Drag</strong> - Draw a new rectangle</p>
+            <p><strong>Shift + Click</strong> - Start drawing on occupied cells</p>
+            <p><strong>Click</strong> - Select an element</p>
+            <p><strong>Alt + Click</strong> - Cycle through overlapped elements</p>
+            <p><strong>Ctrl/Cmd + Click</strong> - Multi-select elements</p>
+            <p><strong>Esc</strong> - Cancel drawing / Clear selection</p>
+          </div>
+          <div>
+            <h3 class="heading mb-2">Navigation</h3>
+            <p><strong>Mouse Wheel</strong> - Zoom in/out (pointer-centered)</p>
+            <p><strong>Middle Mouse Drag</strong> - Pan viewport</p>
+            <p><strong>Space + Left Drag</strong> - Pan viewport (alternative)</p>
+            <p><strong>F</strong> - Focus selected element (center in view)</p>
+          </div>
+          <div>
+            <h3 class="heading mb-2">Selection Editing</h3>
+            <p><strong>Arrow Keys</strong> - Nudge selected element (1 cell)</p>
+            <p><strong>Shift + Arrows</strong> - Nudge selected element (5 cells)</p>
+            <p><strong>Alt + Arrows</strong> - Resize selected element (1 cell)</p>
+            <p><strong>Alt + Shift + Arrows</strong> - Resize selected element (5 cells)</p>
+            <p><strong>Delete / Backspace</strong> - Delete selected element</p>
+          </div>
+          <div>
+            <h3 class="heading mb-2">Undo & Redo</h3>
+            <p><strong>Ctrl/Cmd + Z</strong> - Undo last action</p>
+            <p><strong>Ctrl + Y</strong> or <strong>Ctrl/Cmd + Shift + Z</strong> - Redo</p>
+          </div>
+          <div>
+            <h3 class="heading mb-2">Help</h3>
+            <p><strong>H</strong> or <strong>?</strong> - Show this help dialog</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script>
       (() => {
         const COLS = 16;
@@ -322,6 +423,17 @@
         const CELL_SIZE = 40;
         const AXIS_SIZE = 40;
         const AUTOSAVE_KEY = 'textual-vision:c64-canvas:v1';
+        const COLOR_PALETTE = [
+          { name: 'Default', value: 'rgba(164, 160, 196, 0.25)' },
+          { name: 'Blue', value: 'rgba(104, 184, 255, 0.35)' },
+          { name: 'Green', value: 'rgba(104, 255, 184, 0.35)' },
+          { name: 'Yellow', value: 'rgba(255, 255, 104, 0.35)' },
+          { name: 'Orange', value: 'rgba(255, 184, 104, 0.35)' },
+          { name: 'Red', value: 'rgba(255, 104, 104, 0.35)' },
+          { name: 'Pink', value: 'rgba(255, 104, 184, 0.35)' },
+          { name: 'Purple', value: 'rgba(184, 104, 255, 0.35)' },
+          { name: 'Cyan', value: 'rgba(104, 255, 255, 0.35)' }
+        ];
 
         function getColumnLabel(index) {
           let n = index + 1;
@@ -345,6 +457,7 @@
         const eraseBtn = document.getElementById('eraseToolBtn');
         const clearBtn = document.getElementById('clearCanvasBtn');
         const labelInput = document.getElementById('labelInput');
+        const colorPickerEl = document.getElementById('colorPicker');
         const allowOverlapToggle = document.getElementById('allowOverlapToggle');
         const autosaveToggle = document.getElementById('autosaveToggle');
         const clearAutosaveBtn = document.getElementById('clearAutosaveBtn');
@@ -354,17 +467,30 @@
         const fitViewBtn = document.getElementById('fitViewBtn');
         const selectedLabelInput = document.getElementById('selectedLabelInput');
         const selectedCodeInput = document.getElementById('selectedCodeInput');
+        const selectedColorInput = document.getElementById('selectedColorInput');
         const selectedBoundsEl = document.getElementById('selectedBounds');
         const duplicateSelectedBtn = document.getElementById('duplicateSelectedBtn');
         const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
         const sendBackBtn = document.getElementById('sendBackBtn');
         const bringFrontBtn = document.getElementById('bringFrontBtn');
+        const alignmentToolsEl = document.getElementById('alignmentTools');
+        const alignLeftBtn = document.getElementById('alignLeftBtn');
+        const alignCenterBtn = document.getElementById('alignCenterBtn');
+        const alignRightBtn = document.getElementById('alignRightBtn');
+        const alignTopBtn = document.getElementById('alignTopBtn');
+        const alignMiddleBtn = document.getElementById('alignMiddleBtn');
+        const alignBottomBtn = document.getElementById('alignBottomBtn');
         const saveYamlBtn = document.getElementById('saveYamlBtn');
         const copyYamlBtn = document.getElementById('copyYamlBtn');
         const openYamlInput = document.getElementById('openYamlInput');
         const exportFencesToggle = document.getElementById('exportFencesToggle');
         const pasteYamlBtn = document.getElementById('pasteYamlBtn');
+        const exportPngBtn = document.getElementById('exportPngBtn');
+        const helpBtn = document.getElementById('helpBtn');
+        const helpModal = document.getElementById('helpModal');
+        const closeHelpBtn = document.getElementById('closeHelpBtn');
         const elementsCountEl = document.getElementById('elementsCount');
+        const elementSearchInput = document.getElementById('elementSearchInput');
         const elementsListEl = document.getElementById('elementsList');
         const copyAsciiBtn = document.getElementById('copyAsciiBtn');
         const copyJsonBtn = document.getElementById('copyJsonBtn');
@@ -378,6 +504,9 @@
           panY: 80,
           zoom: 1,
           selectedId: null,
+          selectedIds: [], // multi-select support
+          selectedColor: COLOR_PALETTE[0].value,
+          elementSearchQuery: '',
           allowOverlap: false,
           autosaveEnabled: true,
           wrapExports: true,
@@ -485,6 +614,39 @@
           return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
         }
 
+        function setupColorPicker() {
+          const frag = document.createDocumentFragment();
+          COLOR_PALETTE.forEach((color, index) => {
+            const swatch = document.createElement('div');
+            swatch.className = 'color-swatch';
+            swatch.style.background = color.value;
+            swatch.title = color.name;
+            swatch.dataset.index = index;
+            if (index === 0) swatch.classList.add('selected');
+            swatch.addEventListener('click', () => {
+              state.selectedColor = color.value;
+              colorPickerEl.querySelectorAll('.color-swatch').forEach((s) => s.classList.remove('selected'));
+              swatch.classList.add('selected');
+            });
+            frag.appendChild(swatch);
+          });
+          colorPickerEl.appendChild(frag);
+        }
+
+        function getSelectedElements() {
+          if (state.selectedIds.length > 0) {
+            return state.elements.filter((e) => state.selectedIds.includes(e.id));
+          }
+          if (state.selectedId) {
+            return state.elements.filter((e) => e.id === state.selectedId);
+          }
+          return [];
+        }
+
+        function isMultiSelect() {
+          return state.selectedIds.length > 1;
+        }
+
         function codeExists(code) {
           return state.elements.some((e) => e.code === code);
         }
@@ -578,22 +740,61 @@
 
         function syncSelectionPanel() {
           const selected = findSelectedElement();
-          const has = Boolean(selected);
-          selectedLabelInput.disabled = !has;
-          selectedCodeInput.disabled = !has;
+          const selectedEls = getSelectedElements();
+          const has = Boolean(selected || selectedEls.length > 0);
+          const multi = isMultiSelect();
+
+          selectedLabelInput.disabled = !has || multi;
+          selectedCodeInput.disabled = !has || multi;
+          selectedColorInput.disabled = !has || multi;
           duplicateSelectedBtn.disabled = !has;
           deleteSelectedBtn.disabled = !has;
-          sendBackBtn.disabled = !has;
-          bringFrontBtn.disabled = !has;
+          sendBackBtn.disabled = !has || multi;
+          bringFrontBtn.disabled = !has || multi;
+
+          // Show alignment tools only for multi-select
+          if (multi) {
+            alignmentToolsEl.style.display = 'grid';
+          } else {
+            alignmentToolsEl.style.display = 'none';
+          }
+
           if (!has) {
             selectedLabelInput.value = '';
             selectedCodeInput.value = '';
+            selectedColorInput.value = '';
             selectedBoundsEl.textContent = '--';
             return;
           }
-          selectedLabelInput.value = selected.label || '';
-          selectedCodeInput.value = selected.code || '';
-          selectedBoundsEl.textContent = `${selected.startRow},${selected.startCol} → ${selected.endRow},${selected.endCol}`;
+
+          if (multi) {
+            selectedLabelInput.value = '';
+            selectedCodeInput.value = '';
+            selectedColorInput.value = '';
+            selectedBoundsEl.textContent = `${selectedEls.length} selected`;
+          } else if (selected) {
+            selectedLabelInput.value = selected.label || '';
+            selectedCodeInput.value = selected.code || '';
+            selectedColorInput.value = rgbToHex(selected.color || COLOR_PALETTE[0].value);
+            selectedBoundsEl.textContent = `${selected.startRow},${selected.startCol} → ${selected.endRow},${selected.endCol}`;
+          }
+        }
+
+        function rgbToHex(rgb) {
+          // Convert rgba(r, g, b, a) to #rrggbb
+          const match = rgb.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+          if (!match) return '#a4a0c4';
+          const r = parseInt(match[1]).toString(16).padStart(2, '0');
+          const g = parseInt(match[2]).toString(16).padStart(2, '0');
+          const b = parseInt(match[3]).toString(16).padStart(2, '0');
+          return `#${r}${g}${b}`;
+        }
+
+        function hexToRgba(hex, alpha = 0.35) {
+          const r = parseInt(hex.slice(1, 3), 16);
+          const g = parseInt(hex.slice(3, 5), 16);
+          const b = parseInt(hex.slice(5, 7), 16);
+          return `rgba(${r}, ${g}, ${b}, ${alpha})`;
         }
 
         function pushUndo() {
@@ -650,18 +851,27 @@
         }
 
         function renderElementsList() {
-          elementsCountEl.textContent = `${state.elements.length} total`;
+          const filteredElements = state.elements.filter((el) => {
+            if (!state.elementSearchQuery) return true;
+            const query = state.elementSearchQuery.toLowerCase();
+            return (
+              el.label.toLowerCase().includes(query) ||
+              el.code.toLowerCase().includes(query)
+            );
+          });
+
+          elementsCountEl.textContent = `${filteredElements.length} of ${state.elements.length}`;
           elementsListEl.innerHTML = '';
-          if (state.elements.length === 0) {
+          if (filteredElements.length === 0) {
             const empty = document.createElement('div');
             empty.className = 'opacity-80';
-            empty.textContent = '(none)';
+            empty.textContent = state.elementSearchQuery ? '(no matches)' : '(none)';
             elementsListEl.appendChild(empty);
             return;
           }
 
           const frag = document.createDocumentFragment();
-          state.elements
+          filteredElements
             .slice()
             .reverse()
             .forEach((el) => {
@@ -672,6 +882,15 @@
               btn.dataset.id = el.id;
               const left = document.createElement('div');
               left.className = 'flex items-center gap-2 min-w-0';
+
+              const colorBox = document.createElement('span');
+              colorBox.className = 'inline-block';
+              colorBox.style.width = '12px';
+              colorBox.style.height = '12px';
+              colorBox.style.background = el.color || COLOR_PALETTE[0].value;
+              colorBox.style.border = '1px solid var(--c64-border)';
+              left.appendChild(colorBox);
+
               const code = document.createElement('span');
               code.className = 'heading';
               code.textContent = `[${el.code}]`;
@@ -687,9 +906,12 @@
 
               btn.appendChild(left);
               btn.appendChild(right);
-              if (el.id === state.selectedId) btn.style.boxShadow = 'inset 0 0 0 2px var(--c64-heading)';
+              if (el.id === state.selectedId || state.selectedIds.includes(el.id)) {
+                btn.style.boxShadow = 'inset 0 0 0 2px var(--c64-heading)';
+              }
               btn.addEventListener('click', () => {
                 state.selectedId = el.id;
+                state.selectedIds = [];
                 syncSelectionPanel();
                 markDirty({ list: true });
                 rerender();
@@ -719,13 +941,24 @@
             const col = Number(cellEl.dataset.col);
             const key = `${row}-${col}`;
             const code = occupancy[row - 1][col - 1];
+            const ownerId = owner[row - 1][col - 1];
+            const ownerEl = ownerId ? state.elements.find((e) => e.id === ownerId) : null;
 
             cellEl.textContent = code === '.' ? '' : code;
             cellEl.classList.toggle('occupied', code !== '.');
             cellEl.classList.toggle('hover-highlight', state.mode === 'draw' && hovered === key);
             cellEl.classList.toggle('preview', previews.has(key));
             cellEl.classList.toggle('overlap', overlapPreview.has(key));
-            cellEl.classList.toggle('selected', owner[row - 1][col - 1] === state.selectedId);
+            cellEl.classList.toggle('selected', ownerId === state.selectedId || state.selectedIds.includes(ownerId));
+
+            // Apply element color
+            if (ownerEl && ownerEl.color) {
+              cellEl.style.background = code !== '.' ? ownerEl.color : 'transparent';
+            } else if (code !== '.') {
+              cellEl.style.background = 'rgba(164, 160, 196, 0.25)';
+            } else {
+              cellEl.style.background = 'transparent';
+            }
           });
 
           canvasRootEl.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
@@ -838,6 +1071,7 @@
                 state.selectedId = null;
                 syncSelectionPanel();
               }
+              state.selectedIds = state.selectedIds.filter((id) => state.elements.some((e) => e.id === id));
               markDirty({ exports: true, list: true });
               rerender();
               scheduleAutosave();
@@ -853,7 +1087,32 @@
                 const selectedHit = hits.findIndex((i) => state.elements[i]?.id === state.selectedId);
                 if (selectedHit !== -1) nextIndex = hits[(selectedHit + 1) % hits.length];
               }
-              state.selectedId = state.elements[nextIndex].id;
+              const clickedId = state.elements[nextIndex].id;
+
+              // Handle Ctrl/Cmd+click for multi-select
+              if (event.ctrlKey || event.metaKey) {
+                if (state.selectedIds.includes(clickedId)) {
+                  // Deselect if already selected
+                  state.selectedIds = state.selectedIds.filter((id) => id !== clickedId);
+                  if (state.selectedIds.length === 0) {
+                    state.selectedId = null;
+                  }
+                } else {
+                  // Add to selection
+                  if (!state.selectedIds.includes(clickedId)) {
+                    state.selectedIds.push(clickedId);
+                  }
+                  if (state.selectedId && !state.selectedIds.includes(state.selectedId)) {
+                    state.selectedIds.push(state.selectedId);
+                  }
+                  state.selectedId = null;
+                }
+              } else {
+                // Single select
+                state.selectedId = clickedId;
+                state.selectedIds = [];
+              }
+
               syncSelectionPanel();
               markDirty({ list: true });
               rerender();
@@ -886,10 +1145,12 @@
                 id: makeId(),
                 label: sanitizeLabel(labelInput.value),
                 code: generateUniqueCode(labelInput.value),
+                color: state.selectedColor,
                 ...rect
               };
               state.elements.push(newEl);
               state.selectedId = newEl.id;
+              state.selectedIds = [];
               syncSelectionPanel();
               markDirty({ exports: true, list: true });
               scheduleAutosave();
@@ -1362,6 +1623,25 @@
           }
         });
 
+        selectedColorInput.addEventListener('change', () => {
+          const selected = findSelectedElement();
+          if (!selected) return;
+          const newColor = hexToRgba(selectedColorInput.value);
+          if (newColor !== selected.color) {
+            pushUndo();
+            selected.color = newColor;
+            markDirty({ exports: true, list: true });
+            rerender();
+            scheduleAutosave();
+          }
+        });
+
+        elementSearchInput.addEventListener('input', () => {
+          state.elementSearchQuery = elementSearchInput.value;
+          markDirty({ list: true });
+          rerender();
+        });
+
         duplicateSelectedBtn.addEventListener('click', () => {
           const selected = findSelectedElement();
           if (!selected) return;
@@ -1417,6 +1697,209 @@
           markDirty({ exports: true, list: true });
           rerender();
           scheduleAutosave();
+        });
+
+        // Alignment tools for multi-select
+        alignLeftBtn.addEventListener('click', () => {
+          const selectedEls = getSelectedElements();
+          if (selectedEls.length < 2) return;
+          const minCol = Math.min(...selectedEls.map((e) => e.startCol));
+          pushUndo();
+          selectedEls.forEach((el) => {
+            const width = el.endCol - el.startCol;
+            el.startCol = minCol;
+            el.endCol = minCol + width;
+          });
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        alignRightBtn.addEventListener('click', () => {
+          const selectedEls = getSelectedElements();
+          if (selectedEls.length < 2) return;
+          const maxCol = Math.max(...selectedEls.map((e) => e.endCol));
+          pushUndo();
+          selectedEls.forEach((el) => {
+            const width = el.endCol - el.startCol;
+            el.endCol = maxCol;
+            el.startCol = maxCol - width;
+          });
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        alignCenterBtn.addEventListener('click', () => {
+          const selectedEls = getSelectedElements();
+          if (selectedEls.length < 2) return;
+          const avgCenter = selectedEls.reduce((sum, el) => sum + (el.startCol + el.endCol) / 2, 0) / selectedEls.length;
+          pushUndo();
+          selectedEls.forEach((el) => {
+            const width = el.endCol - el.startCol;
+            const center = Math.round(avgCenter);
+            el.startCol = Math.max(1, Math.min(COLS - width, center - Math.floor(width / 2)));
+            el.endCol = el.startCol + width;
+          });
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        alignTopBtn.addEventListener('click', () => {
+          const selectedEls = getSelectedElements();
+          if (selectedEls.length < 2) return;
+          const minRow = Math.min(...selectedEls.map((e) => e.startRow));
+          pushUndo();
+          selectedEls.forEach((el) => {
+            const height = el.endRow - el.startRow;
+            el.startRow = minRow;
+            el.endRow = minRow + height;
+          });
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        alignBottomBtn.addEventListener('click', () => {
+          const selectedEls = getSelectedElements();
+          if (selectedEls.length < 2) return;
+          const maxRow = Math.max(...selectedEls.map((e) => e.endRow));
+          pushUndo();
+          selectedEls.forEach((el) => {
+            const height = el.endRow - el.startRow;
+            el.endRow = maxRow;
+            el.startRow = maxRow - height;
+          });
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        alignMiddleBtn.addEventListener('click', () => {
+          const selectedEls = getSelectedElements();
+          if (selectedEls.length < 2) return;
+          const avgMiddle = selectedEls.reduce((sum, el) => sum + (el.startRow + el.endRow) / 2, 0) / selectedEls.length;
+          pushUndo();
+          selectedEls.forEach((el) => {
+            const height = el.endRow - el.startRow;
+            const middle = Math.round(avgMiddle);
+            el.startRow = Math.max(1, Math.min(ROWS - height, middle - Math.floor(height / 2)));
+            el.endRow = el.startRow + height;
+          });
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        // Help modal
+        helpBtn.addEventListener('click', () => {
+          helpModal.style.display = 'flex';
+        });
+
+        closeHelpBtn.addEventListener('click', () => {
+          helpModal.style.display = 'none';
+        });
+
+        helpModal.addEventListener('click', (event) => {
+          if (event.target === helpModal) {
+            helpModal.style.display = 'none';
+          }
+        });
+
+        // PNG Export
+        exportPngBtn.addEventListener('click', async () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const gridWidth = (COLS + 1) * CELL_SIZE;
+            const gridHeight = (ROWS + 1) * CELL_SIZE;
+            canvas.width = gridWidth;
+            canvas.height = gridHeight;
+
+            // Background
+            ctx.fillStyle = '#40318d';
+            ctx.fillRect(0, 0, gridWidth, gridHeight);
+
+            // Grid lines and labels
+            ctx.strokeStyle = '#7869c4';
+            ctx.fillStyle = '#7869c4';
+            ctx.font = '12px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // Draw corner
+            ctx.fillStyle = '#37267d';
+            ctx.fillRect(0, 0, AXIS_SIZE, AXIS_SIZE);
+
+            // Draw column labels
+            for (let col = 0; col < COLS; col++) {
+              ctx.fillStyle = '#37267d';
+              ctx.fillRect(AXIS_SIZE + col * CELL_SIZE, 0, CELL_SIZE, AXIS_SIZE);
+              ctx.fillStyle = '#a4a0c4';
+              ctx.fillText(colLabels[col], AXIS_SIZE + col * CELL_SIZE + CELL_SIZE / 2, AXIS_SIZE / 2);
+            }
+
+            // Draw row labels
+            for (let row = 0; row < ROWS; row++) {
+              ctx.fillStyle = '#37267d';
+              ctx.fillRect(0, AXIS_SIZE + row * CELL_SIZE, AXIS_SIZE, CELL_SIZE);
+              ctx.fillStyle = '#a4a0c4';
+              ctx.fillText(String(row + 1), AXIS_SIZE / 2, AXIS_SIZE + row * CELL_SIZE + CELL_SIZE / 2);
+            }
+
+            // Draw grid
+            ctx.strokeStyle = '#7869c4';
+            for (let row = 0; row <= ROWS; row++) {
+              ctx.beginPath();
+              ctx.moveTo(AXIS_SIZE, AXIS_SIZE + row * CELL_SIZE);
+              ctx.lineTo(gridWidth, AXIS_SIZE + row * CELL_SIZE);
+              ctx.stroke();
+            }
+            for (let col = 0; col <= COLS; col++) {
+              ctx.beginPath();
+              ctx.moveTo(AXIS_SIZE + col * CELL_SIZE, AXIS_SIZE);
+              ctx.lineTo(AXIS_SIZE + col * CELL_SIZE, gridHeight);
+              ctx.stroke();
+            }
+
+            // Draw elements
+            state.elements.forEach((el) => {
+              const x = AXIS_SIZE + (el.startCol - 1) * CELL_SIZE;
+              const y = AXIS_SIZE + (el.startRow - 1) * CELL_SIZE;
+              const w = (el.endCol - el.startCol + 1) * CELL_SIZE;
+              const h = (el.endRow - el.startRow + 1) * CELL_SIZE;
+
+              ctx.fillStyle = el.color || COLOR_PALETTE[0].value;
+              ctx.fillRect(x, y, w, h);
+
+              ctx.strokeStyle = '#7869c4';
+              ctx.strokeRect(x, y, w, h);
+
+              // Draw code in each cell
+              ctx.fillStyle = '#ffffff';
+              ctx.font = '10px monospace';
+              for (let row = el.startRow; row <= el.endRow; row++) {
+                for (let col = el.startCol; col <= el.endCol; col++) {
+                  const cellX = AXIS_SIZE + (col - 1) * CELL_SIZE + CELL_SIZE / 2;
+                  const cellY = AXIS_SIZE + (row - 1) * CELL_SIZE + CELL_SIZE / 2;
+                  ctx.fillText(el.code, cellX, cellY);
+                }
+              }
+            });
+
+            // Download
+            canvas.toBlob((blob) => {
+              const link = document.createElement('a');
+              link.href = URL.createObjectURL(blob);
+              link.download = 'c64-canvas.png';
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(link.href), 250);
+              setStatus('PNG exported.');
+            });
+          } catch (error) {
+            setStatus('PNG export failed.');
+          }
         });
 
         viewportEl.addEventListener('wheel', onViewportWheel, { passive: false });
@@ -1589,6 +2072,11 @@
               rerender();
               return;
             }
+            if (event.key.toLowerCase() === 'h' || event.key === '?') {
+              event.preventDefault();
+              helpModal.style.display = 'flex';
+              return;
+            }
           }
           if (event.code === 'Space') {
             state.spacePressed = true;
@@ -1673,6 +2161,7 @@
         }
 
         setupGrid();
+        setupColorPicker();
         syncSelectionPanel();
         tryLoadAutosave();
         rerender();
