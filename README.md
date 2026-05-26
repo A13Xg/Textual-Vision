@@ -1,2 +1,86 @@
 # Textual-Vision
 Textual Vision is intended to be used as a quick and token efficient way to pass visual data represented by text.
+
+## GitHub Pages Static App
+
+This repository now ships a single-file static prototype at `/index.html` for a **C64-themed Visual-to-Text Ideation Canvas**.
+
+- The app runs entirely in-browser (no backend required).
+- A Pages deploy workflow is included at `.github/workflows/deploy-pages.yml`.
+- Enable **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+
+Once enabled, pushes to `main` will deploy the static web app.
+
+## Using The Canvas
+
+Open `/index.html` in a browser (or serve the repo locally with something like `python -m http.server`).
+
+### Core Workflow
+- Pick a label and color, then **Draw** rectangles on the grid to create layout blocks.
+- Click an existing block to **select** it and edit its label/code/color, duplicate it, or delete it.
+- Use **Ctrl/Cmd + Click** to select multiple elements for batch operations.
+- Toggle **Allow Overlap** to permit stacked blocks (otherwise overlaps are blocked).
+- When overlaps are enabled, use **Bring Front** / **Send Back** to control stacking order.
+- Tip: `Alt` + click cycles through stacked elements under the cursor.
+
+### Visual Customization
+- **Color Picker**: Choose from 9 predefined colors to visually distinguish different layout blocks.
+- Each element can have its own color, making complex layouts easier to understand at a glance.
+- Colors are preserved in YAML exports and reflected in PNG exports.
+
+### Multi-Select & Alignment
+- **Ctrl/Cmd + Click** to select multiple elements.
+- When multiple elements are selected, alignment tools become available:
+  - **← Align**: Align left edges
+  - **Align →**: Align right edges
+  - **⊞ Center**: Center horizontally
+  - **↑ Align**: Align top edges
+  - **Align ↓**: Align bottom edges
+  - **⊟ Middle**: Center vertically
+- Perfect for quickly organizing and aligning multiple blocks.
+
+### Navigation
+- Pan: middle mouse drag, or hold `Space` + left-drag
+- Zoom: mouse wheel inside the viewport
+- View tools: **Reset View** and **Fit**
+
+### Keyboard Shortcuts
+- `D`: draw mode
+- `E`: erase mode
+- `F`: focus/center the selected element in the viewport
+- `H` or `?`: show keyboard shortcuts help dialog
+- `Esc`: cancel current draw / deselect / clear selection
+- `Delete` / `Backspace`: delete selected element(s)
+- `Ctrl/Cmd+Z`: undo
+- `Ctrl+Y` (or `Ctrl/Cmd+Shift+Z`): redo
+- Arrow keys: nudge selected element (`Shift` = 5 cells)
+- `Alt` + Arrow keys: resize selected element (`Shift` = 5 cells)
+
+## Storage & Export
+
+### Autosave
+- **Autosave (Local)** stores the canvas state in `localStorage` in your browser.
+- Use **Clear Local Save** to remove it.
+
+### Export Formats
+- **Live ASCII** and **JSON** exports update as you edit.
+- **PNG Export**: Download a visual snapshot of your canvas as a PNG image file (preserves colors and layout).
+- Toggle **Wrap Exports** to include (or omit) fenced code blocks in ASCII/JSON outputs.
+- Use **Copy** buttons to copy ASCII/JSON/YAML to the clipboard.
+- Use **Save As YAML** to download a full snapshot (including viewport transform and colors), and **Open File** to restore.
+- Use **Paste YAML** to load a snapshot directly from a YAML string.
+- You can also drag-and-drop a `.yaml`/`.yml` file (or YAML text) onto the viewport to load it.
+
+### Element Search
+- Use the **Search elements...** input to filter the elements list by label or code.
+- Quickly find specific blocks in complex layouts.
+
+### Help System
+- Press `H` or `?` (or click the **Help** button) to open an interactive keyboard shortcuts reference.
+- The help modal provides a comprehensive guide to all features and shortcuts.
+
+## Notes
+
+- The UI styling uses Tailwind via CDN; a network connection is required for the default styling when opened directly from disk.
+- All features (colors, multi-select, search, alignment) are fully integrated with the undo/redo system.
+- YAML save/load preserves all element properties including colors and positions.
