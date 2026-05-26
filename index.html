@@ -666,8 +666,8 @@
 
     <script>
       (() => {
-        const COLS = 16;
-        const ROWS = 16;
+        let COLS = 16;
+        let ROWS = 16;
         const CELL_SIZE = 40;
         const AXIS_SIZE = 40;
         const AUTOSAVE_KEY = 'textual-vision:c64-canvas:v1';
@@ -744,9 +744,37 @@
         const copyJsonBtn = document.getElementById('copyJsonBtn');
         const asciiOutput = document.getElementById('asciiOutput');
         const jsonOutput = document.getElementById('jsonOutput');
+        const objectTypeInput = document.getElementById('objectTypeInput');
+        const gridRowsInput = document.getElementById('gridRowsInput');
+        const gridColsInput = document.getElementById('gridColsInput');
+        const applyGridSizeBtn = document.getElementById('applyGridSizeBtn');
+        const dragToolBtn = document.getElementById('dragToolBtn');
+        const resizeToolBtn = document.getElementById('resizeToolBtn');
+        const elementNotesInput = document.getElementById('elementNotesInput');
+        const addNoteBtn = document.getElementById('addNoteBtn');
+        const mergeSelectedBtn = document.getElementById('mergeSelectedBtn');
+        const settingsGearBtn = document.getElementById('settingsGearBtn');
+        const settingsModal = document.getElementById('settingsModal');
+        const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+        const switchToModernBtn = document.getElementById('switchToModernBtn');
+        const switchToRetroBtn = document.getElementById('switchToRetroBtn');
+        const defaultThemeSelect = document.getElementById('defaultThemeSelect');
+        const showLogsBtn = document.getElementById('showLogsBtn');
+        const logModal = document.getElementById('logModal');
+        const closeLogBtn = document.getElementById('closeLogBtn');
+        const clearLogsBtn = document.getElementById('clearLogsBtn');
+        const exportLogsBtn = document.getElementById('exportLogsBtn');
+        const logOutput = document.getElementById('logOutput');
+        const contextMenu = document.getElementById('contextMenu');
+        const contextMenuContent = document.getElementById('contextMenuContent');
 
         const state = {
           mode: 'draw',
+          cols: 16,
+          rows: 16,
+          objectType: 'Web-Object',
+          defaultTheme: 'retro',
+          logs: [],
           elements: [],
           panX: 120,
           panY: 80,
@@ -773,6 +801,12 @@
           panStartMouseY: 0,
           panOriginX: 0,
           panOriginY: 0,
+          isDragging: false,
+          isResizing: false,
+          dragStartCell: null,
+          dragOffset: null,
+          resizeStartCell: null,
+          ghostElement: null,
           history: {
             undo: [],
             redo: []
@@ -784,6 +818,12 @@
         function markDirty({ exports = false, list = false } = {}) {
           if (exports) state.dirty.exports = true;
           if (list) state.dirty.list = true;
+        }
+
+        function logMessage(message, level = 'info') {
+          const timestamp = new Date().toISOString();
+          state.logs.push({ timestamp, level, message });
+          console.log(`[${level.toUpperCase()}] ${message}`);
         }
 
         function setStatus(message) {
@@ -816,7 +856,11 @@
         function updateInfoLine() {
           if (!infoLineEl) return;
           const parts = [];
-          parts.push(state.mode === 'erase' ? 'ERASE' : 'DRAW');
+          let modeText = 'DRAW';
+          if (state.mode === 'erase') modeText = 'ERASE';
+          else if (state.mode === 'drag') modeText = 'DRAG';
+          else if (state.mode === 'resize') modeText = 'RESIZE';
+          parts.push(modeText);
           parts.push(`Z:${state.zoom.toFixed(2)}`);
           parts.push(`P:${Math.round(state.panX)},${Math.round(state.panY)}`);
 
@@ -999,6 +1043,8 @@
           deleteSelectedBtn.disabled = !has;
           sendBackBtn.disabled = !has || multi;
           bringFrontBtn.disabled = !has || multi;
+          elementNotesInput.disabled = !has || multi;
+          addNoteBtn.disabled = !has || multi;
 
           // Show alignment tools only for multi-select
           if (multi) {
@@ -1007,11 +1053,20 @@
             alignmentToolsEl.style.display = 'none';
           }
 
+          // Show merge button only for multi-select
+          if (multi) {
+            mergeSelectedBtn.style.display = 'block';
+            mergeSelectedBtn.disabled = false;
+          } else {
+            mergeSelectedBtn.style.display = 'none';
+          }
+
           if (!has) {
             selectedLabelInput.value = '';
             selectedCodeInput.value = '';
             selectedColorInput.value = '';
             selectedBoundsEl.textContent = '--';
+            elementNotesInput.value = '';
             return;
           }
 
@@ -1020,11 +1075,13 @@
             selectedCodeInput.value = '';
             selectedColorInput.value = '';
             selectedBoundsEl.textContent = `${selectedEls.length} selected`;
+            elementNotesInput.value = '';
           } else if (selected) {
             selectedLabelInput.value = selected.label || '';
             selectedCodeInput.value = selected.code || '';
             selectedColorInput.value = rgbToHex(selected.color || COLOR_PALETTE[0].value);
             selectedBoundsEl.textContent = `${selected.startRow},${selected.startCol} → ${selected.endRow},${selected.endCol}`;
+            elementNotesInput.value = selected.notes || '';
           }
         }
 
@@ -1212,7 +1269,21 @@
           canvasRootEl.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
           drawBtn.classList.toggle('active', state.mode === 'draw');
           eraseBtn.classList.toggle('active', state.mode === 'erase');
-          viewportEl.style.cursor = state.isPanning ? 'grabbing' : state.mode === 'erase' ? 'not-allowed' : 'crosshair';
+          dragToolBtn.classList.toggle('active', state.mode === 'drag');
+          resizeToolBtn.classList.toggle('active', state.mode === 'resize');
+
+          let cursor = 'crosshair';
+          if (state.isPanning) {
+            cursor = 'grabbing';
+          } else if (state.mode === 'erase') {
+            cursor = 'not-allowed';
+          } else if (state.mode === 'drag') {
+            cursor = state.isDragging ? 'grabbing' : 'grab';
+          } else if (state.mode === 'resize') {
+            cursor = 'nwse-resize';
+          }
+          viewportEl.style.cursor = cursor;
+
           undoBtn.disabled = state.history.undo.length === 0;
           redoBtn.disabled = state.history.redo.length === 0;
           if (state.dirty.exports) {
@@ -1256,7 +1327,28 @@
             }
           }
 
+          gridEl.innerHTML = '';
           gridEl.appendChild(frag);
+          gridEl.style.gridTemplateColumns = `40px repeat(${COLS}, 40px)`;
+          gridEl.style.gridTemplateRows = `40px repeat(${ROWS}, 40px)`;
+        }
+
+        function rebuildGrid(newRows, newCols) {
+          ROWS = newRows;
+          COLS = newCols;
+          state.rows = newRows;
+          state.cols = newCols;
+
+          // Rebuild colLabels
+          colLabels.length = 0;
+          for (let i = 0; i < COLS; i += 1) {
+            colLabels.push(getColumnLabel(i));
+          }
+
+          setupGrid();
+          markDirty({ exports: true });
+          rerender();
+          logMessage(`Grid resized to ${newRows}x${newCols}`, 'info');
         }
 
         function findContainingElementIndex(row, col) {
@@ -1323,6 +1415,44 @@
               markDirty({ exports: true, list: true });
               rerender();
               scheduleAutosave();
+              logMessage('Element erased', 'info');
+            }
+            return;
+          }
+
+          // Handle drag mode
+          if (state.mode === 'drag') {
+            const idx = findContainingElementIndex(row, col);
+            if (idx !== -1) {
+              const element = state.elements[idx];
+              pushUndo();
+              state.isDragging = true;
+              state.dragStartCell = { row, col };
+              state.dragOffset = {
+                row: row - element.startRow,
+                col: col - element.startCol
+              };
+              state.selectedId = element.id;
+              state.selectedIds = [];
+              syncSelectionPanel();
+              rerender();
+            }
+            return;
+          }
+
+          // Handle resize mode
+          if (state.mode === 'resize') {
+            const idx = findContainingElementIndex(row, col);
+            if (idx !== -1) {
+              const element = state.elements[idx];
+              pushUndo();
+              state.isResizing = true;
+              state.resizeStartCell = { row, col };
+              state.ghostElement = { ...element };
+              state.selectedId = element.id;
+              state.selectedIds = [];
+              syncSelectionPanel();
+              rerender();
             }
             return;
           }
@@ -1379,14 +1509,58 @@
           if (state.isMouseDrawing) {
             state.drawingEnd = { row, col };
           }
+          if (state.isDragging && state.selectedId && state.dragOffset) {
+            const selected = findSelectedElement();
+            if (selected) {
+              const newStartRow = row - state.dragOffset.row;
+              const newStartCol = col - state.dragOffset.col;
+              const width = selected.endCol - selected.startCol;
+              const height = selected.endRow - selected.startRow;
+
+              selected.startRow = Math.max(1, Math.min(ROWS, newStartRow));
+              selected.startCol = Math.max(1, Math.min(COLS, newStartCol));
+              selected.endRow = Math.min(ROWS, selected.startRow + height);
+              selected.endCol = Math.min(COLS, selected.startCol + width);
+
+              markDirty({ exports: true, list: true });
+            }
+          }
+          if (state.isResizing && state.selectedId && state.resizeStartCell) {
+            const selected = findSelectedElement();
+            if (selected) {
+              const rowDiff = row - state.resizeStartCell.row;
+              const colDiff = col - state.resizeStartCell.col;
+
+              selected.endRow = Math.max(selected.startRow, Math.min(ROWS, selected.endRow + rowDiff));
+              selected.endCol = Math.max(selected.startCol, Math.min(COLS, selected.endCol + colDiff));
+
+              state.resizeStartCell = { row, col };
+              markDirty({ exports: true, list: true });
+            }
+          }
           rerender();
         }
 
         function onPointerUpAnywhere() {
           if (state.isMouseDrawing && state.drawingStart && state.drawingEnd) {
+            // Validate title
+            const labelValue = labelInput.value.trim();
+            if (!labelValue) {
+              labelInput.classList.add('input-error');
+              setTimeout(() => labelInput.classList.remove('input-error'), 300);
+              setStatus('Title is required to draw an object');
+              logMessage('Drawing blocked: Title is required', 'warning');
+              state.isMouseDrawing = false;
+              state.drawingStart = null;
+              state.drawingEnd = null;
+              rerender();
+              return;
+            }
+
             const rect = normalizeRect(state.drawingStart, state.drawingEnd);
             if (!state.allowOverlap && rectOverlapsAny(rect)) {
               setStatus('Overlap blocked (toggle Allow Overlap to permit).');
+              logMessage('Drawing blocked: Overlap detected', 'warning');
             } else {
               pushUndo();
               const newEl = {
@@ -1394,6 +1568,8 @@
                 label: sanitizeLabel(labelInput.value),
                 code: generateUniqueCode(labelInput.value),
                 color: state.selectedColor,
+                type: state.objectType,
+                notes: '',
                 ...rect
               };
               state.elements.push(newEl);
@@ -1402,7 +1578,31 @@
               syncSelectionPanel();
               markDirty({ exports: true, list: true });
               scheduleAutosave();
+              logMessage(`Element created: ${newEl.label} [${newEl.code}]`, 'info');
             }
+          }
+
+          if (state.isDragging) {
+            const selected = findSelectedElement();
+            if (selected) {
+              logMessage(`Element dragged: ${selected.label} [${selected.code}]`, 'info');
+            }
+            state.isDragging = false;
+            state.dragStartCell = null;
+            state.dragOffset = null;
+            state.ghostElement = null;
+            scheduleAutosave();
+          }
+
+          if (state.isResizing) {
+            const selected = findSelectedElement();
+            if (selected) {
+              logMessage(`Element resized: ${selected.label} [${selected.code}]`, 'info');
+            }
+            state.isResizing = false;
+            state.resizeStartCell = null;
+            state.ghostElement = null;
+            scheduleAutosave();
           }
 
           state.isMouseDrawing = false;
@@ -1648,7 +1848,10 @@
               startRow: Number(item.startRow),
               endRow: Number(item.endRow),
               startCol: Number(item.startCol),
-              endCol: Number(item.endCol)
+              endCol: Number(item.endCol),
+              color: item.color || COLOR_PALETTE[0].value,
+              type: item.type || 'Web-Object',
+              notes: item.notes || ''
             }))
             .filter((item) => {
               return (
@@ -1728,10 +1931,100 @@
           rerender();
         });
 
+        dragToolBtn.addEventListener('click', () => {
+          state.mode = 'drag';
+          rerender();
+        });
+
+        resizeToolBtn.addEventListener('click', () => {
+          state.mode = 'resize';
+          rerender();
+        });
+
+        applyGridSizeBtn.addEventListener('click', () => {
+          const newRows = parseInt(gridRowsInput.value, 10);
+          const newCols = parseInt(gridColsInput.value, 10);
+          if (isNaN(newRows) || isNaN(newCols) || newRows < 4 || newRows > 64 || newCols < 4 || newCols > 64) {
+            setStatus('Invalid grid size. Use 4-64 for rows and columns.');
+            return;
+          }
+          pushUndo();
+          rebuildGrid(newRows, newCols);
+          setStatus(`Grid resized to ${newRows}x${newCols}`);
+          scheduleAutosave();
+        });
+
+        addNoteBtn.addEventListener('click', () => {
+          const selected = findSelectedElement();
+          if (!selected) return;
+          pushUndo();
+          selected.notes = elementNotesInput.value;
+          markDirty({ exports: true });
+          scheduleAutosave();
+          setStatus('Note saved.');
+          logMessage(`Note added to element ${selected.label}`, 'info');
+        });
+
+        elementNotesInput.addEventListener('change', () => {
+          const selected = findSelectedElement();
+          if (!selected) return;
+          pushUndo();
+          selected.notes = elementNotesInput.value;
+          markDirty({ exports: true });
+          scheduleAutosave();
+        });
+
+        mergeSelectedBtn.addEventListener('click', () => {
+          if (state.selectedIds.length < 2) return;
+          pushUndo();
+
+          const selectedEls = getSelectedElements();
+          const first = selectedEls[0];
+
+          const minRow = Math.min(...selectedEls.map(e => e.startRow));
+          const minCol = Math.min(...selectedEls.map(e => e.startCol));
+          const maxRow = Math.max(...selectedEls.map(e => e.endRow));
+          const maxCol = Math.max(...selectedEls.map(e => e.endCol));
+
+          // Remove all selected elements
+          state.elements = state.elements.filter(e => !state.selectedIds.includes(e.id));
+
+          // Create merged element
+          const merged = {
+            id: makeId(),
+            label: first.label,
+            code: generateUniqueCode(first.label),
+            color: first.color,
+            type: first.type || state.objectType,
+            notes: first.notes || '',
+            startRow: minRow,
+            startCol: minCol,
+            endRow: maxRow,
+            endCol: maxCol
+          };
+
+          state.elements.push(merged);
+          state.selectedId = merged.id;
+          state.selectedIds = [];
+
+          syncSelectionPanel();
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+          setStatus('Elements merged.');
+          logMessage(`Merged ${selectedEls.length} elements into ${merged.label} [${merged.code}]`, 'info');
+        });
+
+        objectTypeInput.addEventListener('change', () => {
+          state.objectType = objectTypeInput.value;
+          scheduleAutosave();
+        });
+
         clearBtn.addEventListener('click', () => {
           if (state.elements.length === 0) return;
           if (!confirm('Clear the canvas? This can be undone.')) return;
           pushUndo();
+          const count = state.elements.length;
           state.elements = [];
           state.isMouseDrawing = false;
           state.drawingStart = null;
@@ -1741,6 +2034,7 @@
           markDirty({ exports: true, list: true });
           rerender();
           scheduleAutosave();
+          logMessage(`Canvas cleared: ${count} elements removed`, 'info');
         });
 
         allowOverlapToggle.addEventListener('change', () => {
@@ -1919,6 +2213,7 @@
           markDirty({ exports: true, list: true });
           rerender();
           scheduleAutosave();
+          logMessage(`Element deleted: ${selected.label} [${selected.code}]`, 'info');
         });
 
         sendBackBtn.addEventListener('click', () => {
@@ -2052,6 +2347,182 @@
         helpModal.addEventListener('click', (event) => {
           if (event.target === helpModal) {
             helpModal.style.display = 'none';
+          }
+        });
+
+        // Settings modal
+        settingsGearBtn.addEventListener('click', () => {
+          if (settingsModal) settingsModal.style.display = 'flex';
+        });
+
+        if (closeSettingsBtn) {
+          closeSettingsBtn.addEventListener('click', () => {
+            if (settingsModal) settingsModal.style.display = 'none';
+          });
+        }
+
+        if (settingsModal) {
+          settingsModal.addEventListener('click', (event) => {
+            if (event.target === settingsModal) {
+              settingsModal.style.display = 'none';
+            }
+          });
+        }
+
+        if (switchToModernBtn) {
+          switchToModernBtn.addEventListener('click', () => {
+            window.location.href = '/modern';
+            logMessage('Switched to modern theme', 'info');
+          });
+        }
+
+        if (switchToRetroBtn) {
+          switchToRetroBtn.addEventListener('click', () => {
+            window.location.href = '/retro';
+            logMessage('Switched to retro theme', 'info');
+          });
+        }
+
+        if (defaultThemeSelect) {
+          defaultThemeSelect.addEventListener('change', () => {
+            state.defaultTheme = defaultThemeSelect.value;
+            try {
+              localStorage.setItem('textual-vision:theme', defaultThemeSelect.value);
+              setStatus(`Default theme set to ${defaultThemeSelect.value}`);
+              logMessage(`Default theme changed to ${defaultThemeSelect.value}`, 'info');
+            } catch (error) {
+              logMessage('Failed to save theme preference', 'error');
+            }
+          });
+        }
+
+        // Logging modal
+        if (showLogsBtn) {
+          showLogsBtn.addEventListener('click', () => {
+            if (logModal && logOutput) {
+              const logsText = state.logs.map(log =>
+                `[${log.timestamp}] [${log.level.toUpperCase()}] ${log.message}`
+              ).join('\n');
+              logOutput.value = logsText || 'No logs yet.';
+              logModal.style.display = 'flex';
+            }
+          });
+        }
+
+        if (closeLogBtn && logModal) {
+          closeLogBtn.addEventListener('click', () => {
+            logModal.style.display = 'none';
+          });
+        }
+
+        if (logModal) {
+          logModal.addEventListener('click', (event) => {
+            if (event.target === logModal) {
+              logModal.style.display = 'none';
+            }
+          });
+        }
+
+        if (clearLogsBtn) {
+          clearLogsBtn.addEventListener('click', () => {
+            state.logs = [];
+            if (logOutput) logOutput.value = 'No logs yet.';
+            setStatus('Logs cleared.');
+          });
+        }
+
+        if (exportLogsBtn) {
+          exportLogsBtn.addEventListener('click', () => {
+            const logsText = state.logs.map(log =>
+              `[${log.timestamp}] [${log.level.toUpperCase()}] ${log.message}`
+            ).join('\n');
+            const blob = new Blob([logsText], { type: 'text/plain;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `textual-vision-logs-${Date.now()}.txt`;
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(link.href), 250);
+            setStatus('Logs exported.');
+            logMessage('Logs exported to file', 'info');
+          });
+        }
+
+        // Context menu
+        function showContextMenu(x, y, element) {
+          if (!contextMenu || !contextMenuContent) return;
+
+          contextMenuContent.innerHTML = '';
+
+          const items = [
+            { label: 'Add Note', action: () => { if (elementNotesInput) elementNotesInput.focus(); } },
+            { label: 'Duplicate', action: () => duplicateSelectedBtn.click() },
+            { separator: true },
+            { label: 'Delete', action: () => deleteSelectedBtn.click() },
+            { separator: true },
+            { label: 'Bring to Front', action: () => bringFrontBtn.click() },
+            { label: 'Send to Back', action: () => sendBackBtn.click() },
+            { separator: true },
+            { label: 'Align Left', action: () => alignLeftBtn.click(), multiOnly: true },
+            { label: 'Align Center', action: () => alignCenterBtn.click(), multiOnly: true },
+            { label: 'Align Right', action: () => alignRightBtn.click(), multiOnly: true },
+            { label: 'Align Top', action: () => alignTopBtn.click(), multiOnly: true },
+            { label: 'Align Middle', action: () => alignMiddleBtn.click(), multiOnly: true },
+            { label: 'Align Bottom', action: () => alignBottomBtn.click(), multiOnly: true }
+          ];
+
+          const isMulti = isMultiSelect();
+
+          items.forEach(item => {
+            if (item.multiOnly && !isMulti) return;
+            if (item.separator) {
+              const sep = document.createElement('div');
+              sep.className = 'context-menu-separator';
+              contextMenuContent.appendChild(sep);
+            } else {
+              const menuItem = document.createElement('div');
+              menuItem.className = 'context-menu-item';
+              menuItem.textContent = item.label;
+              menuItem.addEventListener('click', () => {
+                item.action();
+                contextMenu.style.display = 'none';
+              });
+              contextMenuContent.appendChild(menuItem);
+            }
+          });
+
+          contextMenu.style.left = `${x}px`;
+          contextMenu.style.top = `${y}px`;
+          contextMenu.style.display = 'block';
+        }
+
+        function hideContextMenu() {
+          if (contextMenu) contextMenu.style.display = 'none';
+        }
+
+        if (gridEl) {
+          gridEl.addEventListener('contextmenu', (event) => {
+            const cell = event.target.closest('.cell');
+            if (!cell) return;
+            const row = Number(cell.dataset.row);
+            const col = Number(cell.dataset.col);
+            const idx = findContainingElementIndex(row, col);
+            if (idx !== -1) {
+              event.preventDefault();
+              const element = state.elements[idx];
+              if (!state.selectedId || state.selectedId !== element.id) {
+                state.selectedId = element.id;
+                state.selectedIds = [];
+                syncSelectionPanel();
+                rerender();
+              }
+              showContextMenu(event.clientX, event.clientY, element);
+            }
+          });
+        }
+
+        document.addEventListener('click', (event) => {
+          if (contextMenu && !contextMenu.contains(event.target)) {
+            hideContextMenu();
           }
         });
 
@@ -2408,11 +2879,36 @@
           }
         }
 
+        // Initialize theme based on URL path
+        function initializeTheme() {
+          const path = window.location.pathname;
+          if (path.includes('/modern')) {
+            document.body.classList.add('cubism');
+            logMessage('Modern theme applied', 'info');
+          } else if (path.includes('/retro') || path === '/') {
+            // C64 theme is default
+            logMessage('Retro C64 theme applied', 'info');
+          }
+
+          // Load saved theme preference
+          try {
+            const savedTheme = localStorage.getItem('textual-vision:theme');
+            if (savedTheme) {
+              state.defaultTheme = savedTheme;
+              if (defaultThemeSelect) defaultThemeSelect.value = savedTheme;
+            }
+          } catch (error) {
+            // Ignore localStorage errors
+          }
+        }
+
+        initializeTheme();
         setupGrid();
         setupColorPicker();
         syncSelectionPanel();
         tryLoadAutosave();
         rerender();
+        logMessage('Application initialized', 'info');
       })();
     </script>
   </body>
