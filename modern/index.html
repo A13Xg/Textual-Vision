@@ -1,0 +1,2964 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Textual Vision · Modern Cubism Canvas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --c64-bg: #40318d;
+        --c64-panel: #40318d;
+        --c64-border: #7869c4;
+        --c64-heading: #a4a0c4;
+        --c64-text: #7869c4;
+        --c64-input: #3a2a7a;
+        --c64-input-text: #ffffff;
+      }
+
+      * {
+        font-family: monospace !important;
+      }
+
+      body {
+        margin: 0;
+        background: var(--c64-bg);
+        color: var(--c64-text);
+      }
+
+      .card {
+        background: var(--c64-panel);
+        border: 3px solid var(--c64-border);
+        border-radius: 0;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4,
+      label,
+      .heading {
+        color: var(--c64-heading);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .panel {
+        background: var(--c64-panel);
+        border: 1px solid var(--c64-border);
+      }
+
+      .c64-input,
+      .c64-textarea,
+      .c64-file {
+        width: 100%;
+        background: var(--c64-input);
+        border: 1px solid var(--c64-border);
+        color: var(--c64-input-text);
+        border-radius: 0;
+        padding: 0.45rem 0.5rem;
+      }
+
+      .c64-textarea {
+        min-height: 13rem;
+        resize: vertical;
+      }
+
+      .c64-button {
+        background: #ffffff;
+        border: 2px solid #0066cc;
+        border-radius: 0;
+        color: #0066cc;
+        text-transform: uppercase;
+        font-weight: bold;
+        cursor: pointer;
+        transition: transform 0.1s ease, box-shadow 0.1s ease;
+        box-shadow: 3px 3px 0 #1d1456;
+        padding: 0.45rem 0.6rem;
+      }
+
+      .c64-button:hover {
+        transform: translate(-1px, -1px);
+      }
+
+      .c64-button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: 1px 1px 0 #1d1456;
+      }
+
+      .c64-button:active,
+      .c64-button.active {
+        transform: translate(1px, 1px) scale(0.98);
+        box-shadow: 1px 1px 0 #1d1456;
+      }
+
+      .c64-check {
+        accent-color: var(--c64-heading);
+        width: 1rem;
+        height: 1rem;
+      }
+
+      .viewport {
+        overflow: hidden;
+        position: relative;
+        min-height: 70vh;
+      }
+
+      .viewport.dragover {
+        box-shadow: inset 0 0 0 3px #ffffff, inset 0 0 0 6px var(--c64-heading);
+      }
+
+      .canvas-root {
+        position: absolute;
+        left: 0;
+        top: 0;
+        transform-origin: 0 0;
+        user-select: none;
+      }
+
+      .canvas-grid {
+        display: grid;
+        grid-template-columns: 40px repeat(16, 40px);
+        grid-template-rows: 40px repeat(16, 40px);
+      }
+
+      .axis,
+      .corner,
+      .cell {
+        border: 1px solid var(--c64-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .axis,
+      .corner {
+        color: var(--c64-heading);
+        background: #37267d;
+      }
+
+      .cell {
+        background: transparent;
+        color: #fff;
+        transition: box-shadow 0.1s ease, background-color 0.1s ease;
+        font-size: 0.75rem;
+      }
+
+      .cell.occupied {
+        background: rgba(164, 160, 196, 0.25);
+      }
+
+      .cell.hover-highlight {
+        box-shadow: inset 0 0 0 2px var(--c64-heading);
+      }
+
+      .cell.preview {
+        background: rgba(120, 105, 196, 0.45);
+      }
+
+      .cell.preview.overlap {
+        background: rgba(255, 99, 71, 0.45);
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7);
+      }
+
+      .cell.selected {
+        box-shadow: inset 0 0 0 2px #ffffff, inset 0 0 0 4px var(--c64-heading), 0 0 10px rgba(164, 160, 196, 0.8);
+        animation: selectedGlow 2s ease-in-out infinite;
+      }
+
+      @keyframes selectedGlow {
+        0%, 100% {
+          box-shadow: inset 0 0 0 2px #ffffff, inset 0 0 0 4px var(--c64-heading), 0 0 10px rgba(164, 160, 196, 0.8);
+        }
+        50% {
+          box-shadow: inset 0 0 0 2px #ffffff, inset 0 0 0 4px var(--c64-heading), 0 0 20px rgba(164, 160, 196, 1);
+        }
+      }
+
+      .cell.ghost-outline {
+        background: rgba(255, 255, 255, 0.15);
+        border: 2px dashed #ffffff;
+        opacity: 0.6;
+      }
+
+      .tool-cursor-drag {
+        cursor: grab;
+      }
+
+      .tool-cursor-drag.dragging {
+        cursor: grabbing;
+      }
+
+      .tool-cursor-resize {
+        cursor: nwse-resize;
+      }
+
+      .status-line {
+        min-height: 1rem;
+      }
+
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        z-index: 999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+      }
+
+      .modal-content {
+        max-width: 600px;
+        max-height: 90vh;
+        overflow-y: auto;
+        width: 100%;
+      }
+
+      .color-swatch {
+        width: 24px;
+        height: 24px;
+        border: 2px solid var(--c64-border);
+        cursor: pointer;
+        transition: transform 0.1s ease;
+      }
+
+      .color-swatch:hover {
+        transform: scale(1.1);
+      }
+
+      .color-swatch.selected {
+        box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--c64-heading);
+      }
+
+      /* Context Menu */
+      .context-menu {
+        position: fixed;
+        background: var(--c64-panel);
+        border: 2px solid var(--c64-border);
+        z-index: 1000;
+        min-width: 180px;
+        box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5);
+      }
+
+      .context-menu-item {
+        padding: 0.5rem 0.75rem;
+        cursor: pointer;
+        color: var(--c64-text);
+        transition: background 0.1s ease;
+      }
+
+      .context-menu-item:hover {
+        background: var(--c64-border);
+        color: var(--c64-bg);
+      }
+
+      .context-menu-separator {
+        height: 1px;
+        background: var(--c64-border);
+        margin: 0.25rem 0;
+      }
+
+      /* Settings Gear Button */
+      .settings-gear {
+        position: fixed;
+        bottom: 1rem;
+        left: 1rem;
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: var(--c64-border);
+        border: 2px solid var(--c64-heading);
+        color: var(--c64-bg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 24px;
+        z-index: 100;
+        transition: transform 0.2s ease;
+      }
+
+      .settings-gear:hover {
+        transform: rotate(90deg) scale(1.1);
+      }
+
+      /* Error State */
+      .input-error {
+        border: 2px solid #ff0000 !important;
+        animation: shake 0.3s ease;
+      }
+
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-5px); }
+        75% { transform: translateX(5px); }
+      }
+
+      /* Modern Cubism Theme Styles */
+      .cubism {
+        background: #1a2e50;
+        color: #a8cce0;
+      }
+
+      .cubism-heading {
+        color: #f5c842;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .cubism-btn {
+        background: #e86a2e;
+        clip-path: polygon(0 0, 100% 0, 94% 100%, 6% 100%);
+        color: #fff;
+        font-weight: 700;
+        text-transform: uppercase;
+        border: none;
+        padding: 0.6rem 0.8rem;
+        cursor: pointer;
+        transition: transform 0.1s ease, filter 0.1s ease;
+      }
+
+      .cubism-btn:hover {
+        filter: brightness(1.1);
+        transform: translateY(-2px);
+      }
+
+      .cubism-btn:active {
+        transform: translateY(0);
+      }
+
+      .cubism-panel {
+        background: rgba(26, 128, 128, 0.28);
+        border-left: 4px solid #1ab8b8;
+        transform: skewX(-2deg);
+        padding: 1rem;
+      }
+
+      .cubism-card {
+        background: rgba(26, 46, 80, 0.8);
+        border: 2px solid #1ab8b8;
+        clip-path: polygon(0 0, 98% 0, 100% 5%, 100% 100%, 2% 100%, 0 95%);
+      }
+
+      .cubism-input {
+        background: rgba(26, 46, 80, 0.6);
+        border: 2px solid #1ab8b8;
+        color: #a8cce0;
+        clip-path: polygon(0 0, 100% 0, 98% 100%, 2% 100%);
+        padding: 0.5rem;
+      }
+
+      .cubism .canvas-grid {
+        border: 2px solid #1ab8b8;
+      }
+
+      .cubism .cell {
+        border: 1px solid rgba(26, 184, 184, 0.3);
+        background: rgba(26, 46, 80, 0.4);
+      }
+
+      .cubism .axis,
+      .cubism .corner {
+        background: rgba(26, 46, 80, 0.8);
+        border: 1px solid #1ab8b8;
+        color: #f5c842;
+      }
+
+      /* Apply cubism styles to buttons and elements when cubism theme is active */
+      .cubism .c64-button {
+        background: #e86a2e;
+        clip-path: polygon(0 0, 100% 0, 94% 100%, 6% 100%);
+        color: #fff;
+        border: none;
+        box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.3);
+      }
+
+      .cubism .c64-button:hover {
+        filter: brightness(1.1);
+        transform: translateY(-2px);
+        box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.3);
+      }
+
+      .cubism .c64-button:active,
+      .cubism .c64-button.active {
+        transform: translateY(0);
+        filter: brightness(1.2);
+        box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3);
+      }
+
+      .cubism .card {
+        background: rgba(26, 46, 80, 0.8);
+        border: 2px solid #1ab8b8;
+        clip-path: polygon(0 0, 98% 0, 100% 5%, 100% 100%, 2% 100%, 0 95%);
+      }
+
+      .cubism .panel {
+        background: rgba(26, 128, 128, 0.28);
+        border-left: 4px solid #1ab8b8;
+      }
+
+      .cubism .c64-input,
+      .cubism .c64-textarea {
+        background: rgba(26, 46, 80, 0.6);
+        border: 2px solid #1ab8b8;
+        color: #a8cce0;
+      }
+
+      .cubism h1,
+      .cubism h2,
+      .cubism h3,
+      .cubism h4,
+      .cubism label,
+      .cubism .heading {
+        color: #f5c842;
+      }
+    </style>
+  </head>
+  <body class="cubism">
+    <div class="h-screen flex flex-col">
+      <header class="sticky top-0 z-10 card p-3 m-3 mb-2">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 class="text-lg">Visual-To-Text Ideation Canvas · Modern Mode</h1>
+            <p class="text-xs mt-1">Draw rectangular layout blocks, pan/zoom the viewport, and export ASCII + JSON + YAML.</p>
+          </div>
+          <div class="text-xs status-line heading sm:text-right">
+            <div id="statusLine"></div>
+            <div id="infoLine" class="opacity-80"></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="flex-1 grid grid-cols-1 lg:grid-cols-[270px_1fr_360px] gap-3 px-3 pb-3 min-h-0">
+        <aside class="card p-3 space-y-3 overflow-auto">
+          <h2 class="text-sm">Tools</h2>
+
+          <div class="space-y-1">
+            <label for="labelInput" class="text-xs block">Element Label</label>
+            <input id="labelInput" class="c64-input" type="text" value="NAV BAR" maxlength="40" />
+          </div>
+
+          <div class="space-y-1">
+            <label class="text-xs block">Element Color</label>
+            <div id="colorPicker" class="flex gap-2 flex-wrap"></div>
+          </div>
+
+          <div class="space-y-1">
+            <label for="objectTypeInput" class="text-xs block">Object Type <span class="text-red-400">*</span></label>
+            <select id="objectTypeInput" class="c64-input">
+              <option value="Web-Object">Web-Object</option>
+              <option value="Text">Text</option>
+              <option value="Graphic">Graphic</option>
+            </select>
+          </div>
+
+          <div class="space-y-1">
+            <label for="gridRowsInput" class="text-xs block">Grid Rows</label>
+            <input id="gridRowsInput" class="c64-input" type="number" value="16" min="4" max="64" />
+          </div>
+
+          <div class="space-y-1">
+            <label for="gridColsInput" class="text-xs block">Grid Columns</label>
+            <input id="gridColsInput" class="c64-input" type="number" value="16" min="4" max="64" />
+          </div>
+
+          <button id="applyGridSizeBtn" class="c64-button w-full" type="button">Apply Grid Size</button>
+
+          <div class="panel p-2 text-xs space-y-2">
+            <h3 class="text-xs">Mouse Tools</h3>
+            <button id="dragToolBtn" class="c64-button w-full" type="button">Drag Element</button>
+            <button id="resizeToolBtn" class="c64-button w-full" type="button">Resize Element</button>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button id="drawToolBtn" class="c64-button active" type="button">Draw</button>
+            <button id="eraseToolBtn" class="c64-button" type="button">Erase</button>
+          </div>
+
+          <button id="clearCanvasBtn" class="c64-button w-full" type="button">Clear Canvas</button>
+
+          <div class="panel p-2 text-xs space-y-2">
+            <label class="flex items-center gap-2">
+              <input id="allowOverlapToggle" class="c64-check" type="checkbox" />
+              <span>Allow Overlap</span>
+            </label>
+            <label class="flex items-center gap-2">
+              <input id="autosaveToggle" class="c64-check" type="checkbox" checked />
+              <span>Autosave (Local)</span>
+            </label>
+            <button id="clearAutosaveBtn" class="c64-button w-full" type="button">Clear Local Save</button>
+          </div>
+
+          <div class="panel p-2 text-xs space-y-2">
+            <div class="flex gap-2">
+              <button id="undoBtn" class="c64-button flex-1" type="button">Undo</button>
+              <button id="redoBtn" class="c64-button flex-1" type="button">Redo</button>
+            </div>
+            <div class="flex gap-2">
+              <button id="resetViewBtn" class="c64-button flex-1" type="button">Reset View</button>
+              <button id="fitViewBtn" class="c64-button flex-1" type="button">Fit</button>
+            </div>
+          </div>
+
+          <div class="panel p-2 text-xs space-y-2">
+            <h3 class="text-xs">Selection</h3>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="space-y-1 col-span-2">
+                <label for="selectedLabelInput" class="text-xs block">Label</label>
+                <input id="selectedLabelInput" class="c64-input" type="text" placeholder="(none)" maxlength="40" disabled />
+              </div>
+              <div class="space-y-1">
+                <label for="selectedCodeInput" class="text-xs block">Code</label>
+                <input id="selectedCodeInput" class="c64-input" type="text" placeholder="--" maxlength="2" disabled />
+              </div>
+              <div class="space-y-1">
+                <label for="selectedColorInput" class="text-xs block">Color</label>
+                <input id="selectedColorInput" class="c64-input" type="color" disabled />
+              </div>
+              <div class="space-y-1 col-span-2">
+                <label class="text-xs block">Bounds</label>
+                <div id="selectedBounds" class="c64-input opacity-80 select-text">--</div>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <button id="duplicateSelectedBtn" class="c64-button" type="button" disabled>Duplicate</button>
+              <button id="deleteSelectedBtn" class="c64-button" type="button" disabled>Delete</button>
+              <button id="sendBackBtn" class="c64-button" type="button" disabled>Send Back</button>
+              <button id="bringFrontBtn" class="c64-button" type="button" disabled>Bring Front</button>
+            </div>
+            <div id="alignmentTools" class="grid grid-cols-3 gap-2" style="display: none;">
+              <button id="alignLeftBtn" class="c64-button text-xs" type="button">← Align</button>
+              <button id="alignCenterBtn" class="c64-button text-xs" type="button">⊞ Center</button>
+              <button id="alignRightBtn" class="c64-button text-xs" type="button">Align →</button>
+              <button id="alignTopBtn" class="c64-button text-xs" type="button">↑ Align</button>
+              <button id="alignMiddleBtn" class="c64-button text-xs" type="button">⊟ Middle</button>
+              <button id="alignBottomBtn" class="c64-button text-xs" type="button">Align ↓</button>
+            </div>
+            <div class="space-y-1">
+              <label for="elementNotesInput" class="text-xs block">Notes</label>
+              <textarea id="elementNotesInput" class="c64-input" placeholder="Add notes for LLM interpretation..." rows="3" disabled></textarea>
+              <button id="addNoteBtn" class="c64-button w-full" type="button" disabled>Add Note</button>
+            </div>
+            <button id="mergeSelectedBtn" class="c64-button w-full" type="button" disabled style="display: none;">Merge to Same Object</button>
+          </div>
+
+          <div class="panel p-2 text-xs leading-relaxed">
+            <p>Pan: middle mouse drag OR hold Space + left drag</p>
+            <p>Zoom: mouse wheel in viewport</p>
+            <p>Select: click a block (Alt+click cycles overlaps; Ctrl+click multi-select; Shift starts draw on occupied cells)</p>
+            <p>Shortcuts: D · E · F (focus) · H (help) · Esc · Del · Ctrl/Cmd+Z · Ctrl+Y</p>
+            <p>Nudge: Arrow keys (Shift = 5) · Resize: Alt+Arrow (Shift = 5)</p>
+          </div>
+        </aside>
+
+        <section class="card p-2 min-h-0">
+          <div id="viewport" class="viewport panel h-full">
+            <div id="canvasRoot" class="canvas-root">
+              <div id="grid" class="canvas-grid"></div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="card p-3 space-y-3 overflow-auto">
+          <h2 class="text-sm">Storage & Export</h2>
+
+          <div class="grid grid-cols-2 gap-2">
+            <button id="saveYamlBtn" class="c64-button" type="button">Save As YAML</button>
+            <label class="c64-button text-center" for="openYamlInput">Open File</label>
+            <button id="exportPngBtn" class="c64-button" type="button">Export PNG</button>
+            <button id="helpBtn" class="c64-button" type="button">Help</button>
+          </div>
+          <input id="openYamlInput" class="hidden" type="file" accept=".yaml,.yml" />
+
+          <div class="panel p-2 text-xs space-y-2">
+            <div class="flex items-center justify-between gap-3">
+              <label class="flex items-center gap-2">
+                <input id="exportFencesToggle" class="c64-check" type="checkbox" checked />
+                <span>Wrap Exports</span>
+              </label>
+              <button id="pasteYamlBtn" class="c64-button" type="button">Paste YAML</button>
+            </div>
+          </div>
+
+          <div class="panel p-2 text-xs space-y-2">
+            <div class="flex items-center justify-between gap-3">
+              <div class="heading">Elements</div>
+              <div id="elementsCount" class="opacity-80"></div>
+            </div>
+            <input id="elementSearchInput" class="c64-input" type="text" placeholder="Search elements..." />
+            <div id="elementsList" class="space-y-1"></div>
+          </div>
+
+          <div class="space-y-1">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="text-xs">ASCII Art Grid Map</h3>
+              <button id="copyAsciiBtn" class="c64-button" type="button">Copy</button>
+            </div>
+            <textarea id="asciiOutput" class="c64-textarea" readonly></textarea>
+          </div>
+
+          <div class="space-y-1">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="text-xs">Structured JSON Matrix</h3>
+              <button id="copyJsonBtn" class="c64-button" type="button">Copy</button>
+            </div>
+            <textarea id="jsonOutput" class="c64-textarea" readonly></textarea>
+          </div>
+
+          <button id="copyYamlBtn" class="c64-button w-full" type="button">Copy YAML</button>
+        </aside>
+      </main>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal-backdrop" style="display: none;">
+      <div class="modal-content card p-4">
+        <div class="flex items-start justify-between mb-3">
+          <h2 class="text-base">Keyboard Shortcuts & Help</h2>
+          <button id="closeHelpBtn" class="c64-button">×</button>
+        </div>
+        <div class="space-y-3 text-xs">
+          <div>
+            <h3 class="heading mb-2">Drawing & Editing</h3>
+            <p><strong>D</strong> - Switch to Draw mode</p>
+            <p><strong>E</strong> - Switch to Erase mode</p>
+            <p><strong>Click & Drag</strong> - Draw a new rectangle</p>
+            <p><strong>Shift + Click</strong> - Start drawing on occupied cells</p>
+            <p><strong>Click</strong> - Select an element</p>
+            <p><strong>Alt + Click</strong> - Cycle through overlapped elements</p>
+            <p><strong>Ctrl/Cmd + Click</strong> - Multi-select elements</p>
+            <p><strong>Esc</strong> - Cancel drawing / Clear selection</p>
+          </div>
+          <div>
+            <h3 class="heading mb-2">Navigation</h3>
+            <p><strong>Mouse Wheel</strong> - Zoom in/out (pointer-centered)</p>
+            <p><strong>Middle Mouse Drag</strong> - Pan viewport</p>
+            <p><strong>Space + Left Drag</strong> - Pan viewport (alternative)</p>
+            <p><strong>F</strong> - Focus selected element (center in view)</p>
+          </div>
+          <div>
+            <h3 class="heading mb-2">Selection Editing</h3>
+            <p><strong>Arrow Keys</strong> - Nudge selected element (1 cell)</p>
+            <p><strong>Shift + Arrows</strong> - Nudge selected element (5 cells)</p>
+            <p><strong>Alt + Arrows</strong> - Resize selected element (1 cell)</p>
+            <p><strong>Alt + Shift + Arrows</strong> - Resize selected element (5 cells)</p>
+            <p><strong>Delete / Backspace</strong> - Delete selected element</p>
+          </div>
+          <div>
+            <h3 class="heading mb-2">Undo & Redo</h3>
+            <p><strong>Ctrl/Cmd + Z</strong> - Undo last action</p>
+            <p><strong>Ctrl + Y</strong> or <strong>Ctrl/Cmd + Shift + Z</strong> - Redo</p>
+          </div>
+          <div>
+            <h3 class="heading mb-2">Help</h3>
+            <p><strong>H</strong> or <strong>?</strong> - Show this help dialog</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal-backdrop" style="display: none;">
+      <div class="modal-content card p-4">
+        <div class="flex items-start justify-between mb-3">
+          <h2 class="text-base">Settings</h2>
+          <button id="closeSettingsBtn" class="c64-button">×</button>
+        </div>
+        <div class="space-y-3 text-xs">
+          <div>
+            <h3 class="heading mb-2">Theme</h3>
+            <button id="switchToModernBtn" class="c64-button w-full mb-2">Switch to Modern Theme</button>
+            <button id="switchToRetroBtn" class="c64-button w-full">Switch to Retro Theme</button>
+          </div>
+          <div>
+            <h3 class="heading mb-2">Default Theme</h3>
+            <select id="defaultThemeSelect" class="c64-input w-full">
+              <option value="retro">Retro (C64)</option>
+              <option value="modern">Modern (Cubism)</option>
+            </select>
+          </div>
+          <div>
+            <h3 class="heading mb-2">Logs</h3>
+            <button id="showLogsBtn" class="c64-button w-full">Show Log Viewer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log Viewer Modal -->
+    <div id="logModal" class="modal-backdrop" style="display: none;">
+      <div class="modal-content card p-4">
+        <div class="flex items-start justify-between mb-3">
+          <h2 class="text-base">Log Viewer</h2>
+          <button id="closeLogBtn" class="c64-button">×</button>
+        </div>
+        <div class="space-y-2">
+          <div class="flex gap-2">
+            <button id="clearLogsBtn" class="c64-button">Clear Logs</button>
+            <button id="exportLogsBtn" class="c64-button">Export Logs</button>
+          </div>
+          <textarea id="logOutput" class="c64-textarea" readonly style="min-height: 400px;"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="contextMenu" class="context-menu" style="display: none;">
+      <div id="contextMenuContent"></div>
+    </div>
+
+    <!-- Settings Gear Button -->
+    <button id="settingsGearBtn" class="settings-gear" title="Settings">⚙</button>
+
+    <script>
+      (() => {
+        let COLS = 16;
+        let ROWS = 16;
+        const CELL_SIZE = 40;
+        const AXIS_SIZE = 40;
+        const AUTOSAVE_KEY = 'textual-vision:c64-canvas:v1';
+        const COLOR_PALETTE = [
+          { name: 'Default', value: 'rgba(164, 160, 196, 0.25)' },
+          { name: 'Blue', value: 'rgba(104, 184, 255, 0.35)' },
+          { name: 'Green', value: 'rgba(104, 255, 184, 0.35)' },
+          { name: 'Yellow', value: 'rgba(255, 255, 104, 0.35)' },
+          { name: 'Orange', value: 'rgba(255, 184, 104, 0.35)' },
+          { name: 'Red', value: 'rgba(255, 104, 104, 0.35)' },
+          { name: 'Pink', value: 'rgba(255, 104, 184, 0.35)' },
+          { name: 'Purple', value: 'rgba(184, 104, 255, 0.35)' },
+          { name: 'Cyan', value: 'rgba(104, 255, 255, 0.35)' }
+        ];
+
+        function getColumnLabel(index) {
+          let n = index + 1;
+          let label = '';
+          while (n > 0) {
+            const rem = (n - 1) % 26;
+            label = String.fromCharCode(65 + rem) + label;
+            n = Math.floor((n - 1) / 26);
+          }
+          return label;
+        }
+
+        const colLabels = Array.from({ length: COLS }, (_, i) => getColumnLabel(i));
+
+        const gridEl = document.getElementById('grid');
+        const viewportEl = document.getElementById('viewport');
+        const canvasRootEl = document.getElementById('canvasRoot');
+        const statusLineEl = document.getElementById('statusLine');
+        const infoLineEl = document.getElementById('infoLine');
+        const drawBtn = document.getElementById('drawToolBtn');
+        const eraseBtn = document.getElementById('eraseToolBtn');
+        const clearBtn = document.getElementById('clearCanvasBtn');
+        const labelInput = document.getElementById('labelInput');
+        const colorPickerEl = document.getElementById('colorPicker');
+        const allowOverlapToggle = document.getElementById('allowOverlapToggle');
+        const autosaveToggle = document.getElementById('autosaveToggle');
+        const clearAutosaveBtn = document.getElementById('clearAutosaveBtn');
+        const undoBtn = document.getElementById('undoBtn');
+        const redoBtn = document.getElementById('redoBtn');
+        const resetViewBtn = document.getElementById('resetViewBtn');
+        const fitViewBtn = document.getElementById('fitViewBtn');
+        const selectedLabelInput = document.getElementById('selectedLabelInput');
+        const selectedCodeInput = document.getElementById('selectedCodeInput');
+        const selectedColorInput = document.getElementById('selectedColorInput');
+        const selectedBoundsEl = document.getElementById('selectedBounds');
+        const duplicateSelectedBtn = document.getElementById('duplicateSelectedBtn');
+        const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+        const sendBackBtn = document.getElementById('sendBackBtn');
+        const bringFrontBtn = document.getElementById('bringFrontBtn');
+        const alignmentToolsEl = document.getElementById('alignmentTools');
+        const alignLeftBtn = document.getElementById('alignLeftBtn');
+        const alignCenterBtn = document.getElementById('alignCenterBtn');
+        const alignRightBtn = document.getElementById('alignRightBtn');
+        const alignTopBtn = document.getElementById('alignTopBtn');
+        const alignMiddleBtn = document.getElementById('alignMiddleBtn');
+        const alignBottomBtn = document.getElementById('alignBottomBtn');
+        const saveYamlBtn = document.getElementById('saveYamlBtn');
+        const copyYamlBtn = document.getElementById('copyYamlBtn');
+        const openYamlInput = document.getElementById('openYamlInput');
+        const exportFencesToggle = document.getElementById('exportFencesToggle');
+        const pasteYamlBtn = document.getElementById('pasteYamlBtn');
+        const exportPngBtn = document.getElementById('exportPngBtn');
+        const helpBtn = document.getElementById('helpBtn');
+        const helpModal = document.getElementById('helpModal');
+        const closeHelpBtn = document.getElementById('closeHelpBtn');
+        const elementsCountEl = document.getElementById('elementsCount');
+        const elementSearchInput = document.getElementById('elementSearchInput');
+        const elementsListEl = document.getElementById('elementsList');
+        const copyAsciiBtn = document.getElementById('copyAsciiBtn');
+        const copyJsonBtn = document.getElementById('copyJsonBtn');
+        const asciiOutput = document.getElementById('asciiOutput');
+        const jsonOutput = document.getElementById('jsonOutput');
+        const objectTypeInput = document.getElementById('objectTypeInput');
+        const gridRowsInput = document.getElementById('gridRowsInput');
+        const gridColsInput = document.getElementById('gridColsInput');
+        const applyGridSizeBtn = document.getElementById('applyGridSizeBtn');
+        const dragToolBtn = document.getElementById('dragToolBtn');
+        const resizeToolBtn = document.getElementById('resizeToolBtn');
+        const elementNotesInput = document.getElementById('elementNotesInput');
+        const addNoteBtn = document.getElementById('addNoteBtn');
+        const mergeSelectedBtn = document.getElementById('mergeSelectedBtn');
+        const settingsGearBtn = document.getElementById('settingsGearBtn');
+        const settingsModal = document.getElementById('settingsModal');
+        const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+        const switchToModernBtn = document.getElementById('switchToModernBtn');
+        const switchToRetroBtn = document.getElementById('switchToRetroBtn');
+        const defaultThemeSelect = document.getElementById('defaultThemeSelect');
+        const showLogsBtn = document.getElementById('showLogsBtn');
+        const logModal = document.getElementById('logModal');
+        const closeLogBtn = document.getElementById('closeLogBtn');
+        const clearLogsBtn = document.getElementById('clearLogsBtn');
+        const exportLogsBtn = document.getElementById('exportLogsBtn');
+        const logOutput = document.getElementById('logOutput');
+        const contextMenu = document.getElementById('contextMenu');
+        const contextMenuContent = document.getElementById('contextMenuContent');
+
+        const state = {
+          mode: 'draw',
+          cols: 16,
+          rows: 16,
+          objectType: 'Web-Object',
+          defaultTheme: 'retro',
+          logs: [],
+          elements: [],
+          panX: 120,
+          panY: 80,
+          zoom: 1,
+          selectedId: null,
+          selectedIds: [], // multi-select support
+          selectedColor: COLOR_PALETTE[0].value,
+          elementSearchQuery: '',
+          allowOverlap: false,
+          autosaveEnabled: true,
+          wrapExports: true,
+          dirty: {
+            exports: true,
+            list: true
+          },
+          hoveredCell: null,
+          drawingStart: null,
+          drawingEnd: null,
+          isMouseDrawing: false,
+          isPanning: false,
+          panPointerId: null,
+          spacePressed: false,
+          panStartMouseX: 0,
+          panStartMouseY: 0,
+          panOriginX: 0,
+          panOriginY: 0,
+          isDragging: false,
+          isResizing: false,
+          dragStartCell: null,
+          dragOffset: null,
+          resizeStartCell: null,
+          ghostElement: null,
+          history: {
+            undo: [],
+            redo: []
+          },
+          autosaveTimer: null,
+          statusTimer: null
+        };
+
+        function markDirty({ exports = false, list = false } = {}) {
+          if (exports) state.dirty.exports = true;
+          if (list) state.dirty.list = true;
+        }
+
+        function logMessage(message, level = 'info') {
+          const timestamp = new Date().toISOString();
+          state.logs.push({ timestamp, level, message });
+          console.log(`[${level.toUpperCase()}] ${message}`);
+        }
+
+        function setStatus(message) {
+          if (!statusLineEl) return;
+          statusLineEl.textContent = String(message || '');
+          if (state.statusTimer) window.clearTimeout(state.statusTimer);
+          if (message) {
+            state.statusTimer = window.setTimeout(() => {
+              statusLineEl.textContent = '';
+              state.statusTimer = null;
+            }, 3500);
+          }
+        }
+
+        function scheduleAutosave() {
+          if (!state.autosaveEnabled) return;
+          if (state.autosaveTimer) window.clearTimeout(state.autosaveTimer);
+          state.autosaveTimer = window.setTimeout(() => {
+            try {
+              const payload = serializeStatePayload();
+              localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
+            } catch (error) {
+              // ignore localStorage write errors (quota / private mode)
+            } finally {
+              state.autosaveTimer = null;
+            }
+          }, 250);
+        }
+
+        function updateInfoLine() {
+          if (!infoLineEl) return;
+          const parts = [];
+          let modeText = 'DRAW';
+          if (state.mode === 'erase') modeText = 'ERASE';
+          else if (state.mode === 'drag') modeText = 'DRAG';
+          else if (state.mode === 'resize') modeText = 'RESIZE';
+          parts.push(modeText);
+          parts.push(`Z:${state.zoom.toFixed(2)}`);
+          parts.push(`P:${Math.round(state.panX)},${Math.round(state.panY)}`);
+
+          if (state.hoveredCell) {
+            parts.push(`H:${state.hoveredCell.row},${state.hoveredCell.col}`);
+          }
+
+          const selected = findSelectedElement();
+          if (selected) {
+            const w = selected.endCol - selected.startCol + 1;
+            const h = selected.endRow - selected.startRow + 1;
+            parts.push(`S:[${selected.code}] ${selected.label} (${w}x${h})`);
+          }
+
+          infoLineEl.textContent = parts.join(' · ');
+        }
+
+        function normalizeRect(a, b) {
+          return {
+            startRow: Math.min(a.row, b.row),
+            endRow: Math.max(a.row, b.row),
+            startCol: Math.min(a.col, b.col),
+            endCol: Math.max(a.col, b.col)
+          };
+        }
+
+        function sanitizeLabel(label) {
+          const cleaned = String(label || '').replace(/[^A-Za-z0-9 ]+/g, ' ').trim();
+          return cleaned || 'BLOCK';
+        }
+
+        function getCodeBase(label) {
+          const letters = sanitizeLabel(label).toUpperCase().replace(/[^A-Z]/g, '');
+          if (letters.length >= 2) return letters.slice(0, 2);
+          if (letters.length === 1) return `${letters}X`;
+          return 'BL';
+        }
+
+        function makeId() {
+          if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            return window.crypto.randomUUID();
+          }
+          return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        }
+
+        function setupColorPicker() {
+          const frag = document.createDocumentFragment();
+          COLOR_PALETTE.forEach((color, index) => {
+            const swatch = document.createElement('div');
+            swatch.className = 'color-swatch';
+            swatch.style.background = color.value;
+            swatch.title = color.name;
+            swatch.dataset.index = index;
+            if (index === 0) swatch.classList.add('selected');
+            swatch.addEventListener('click', () => {
+              state.selectedColor = color.value;
+              colorPickerEl.querySelectorAll('.color-swatch').forEach((s) => s.classList.remove('selected'));
+              swatch.classList.add('selected');
+            });
+            frag.appendChild(swatch);
+          });
+          colorPickerEl.appendChild(frag);
+        }
+
+        function getSelectedElements() {
+          if (state.selectedIds.length > 0) {
+            return state.elements.filter((e) => state.selectedIds.includes(e.id));
+          }
+          if (state.selectedId) {
+            return state.elements.filter((e) => e.id === state.selectedId);
+          }
+          return [];
+        }
+
+        function isMultiSelect() {
+          return state.selectedIds.length > 1;
+        }
+
+        function codeExists(code) {
+          return state.elements.some((e) => e.code === code);
+        }
+
+        function codeExistsOther(code, id) {
+          return state.elements.some((e) => e.code === code && e.id !== id);
+        }
+
+        function generateUniqueCode(label) {
+          const base = getCodeBase(label);
+          if (!codeExists(base)) return base;
+
+          for (let i = 0; i < 26; i += 1) {
+            const candidate = `${base[0]}${String.fromCharCode(65 + i)}`;
+            if (!codeExists(candidate)) return candidate;
+          }
+
+          for (let i = 0; i < 26; i += 1) {
+            for (let j = 0; j < 26; j += 1) {
+              const candidate = `${String.fromCharCode(65 + i)}${String.fromCharCode(65 + j)}`;
+              if (!codeExists(candidate)) return candidate;
+            }
+          }
+
+          return base;
+        }
+
+        function buildOccupancy() {
+          const matrix = Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => '.'));
+          const owner = Array.from({ length: ROWS }, () => Array.from({ length: COLS }, () => null));
+          state.elements.forEach((element) => {
+            for (let row = element.startRow; row <= element.endRow; row += 1) {
+              for (let col = element.startCol; col <= element.endCol; col += 1) {
+                matrix[row - 1][col - 1] = element.code;
+                owner[row - 1][col - 1] = element.id;
+              }
+            }
+          });
+          return { matrix, owner };
+        }
+
+        function previewSet() {
+          if (!state.isMouseDrawing || !state.drawingStart || !state.drawingEnd) return new Set();
+          const rect = normalizeRect(state.drawingStart, state.drawingEnd);
+          const set = new Set();
+          for (let row = rect.startRow; row <= rect.endRow; row += 1) {
+            for (let col = rect.startCol; col <= rect.endCol; col += 1) {
+              set.add(`${row}-${col}`);
+            }
+          }
+          return set;
+        }
+
+        function formatAscii(matrix) {
+          const colHeader = `    ${colLabels.map((c) => c.padEnd(4, ' ')).join('')}`;
+          const lines = matrix.map((rowCells, rowIndex) => {
+            const rowLabel = String(rowIndex + 1).padStart(2, '0');
+            const rowText = rowCells
+              .map((cell) => (cell === '.' ? ' .  ' : `[${cell}]`))
+              .join('');
+            return `${rowLabel}  ${rowText}`;
+          });
+          const body = [colHeader, ...lines].join('\n');
+          return state.wrapExports ? ['```text', body, '```'].join('\n') : body;
+        }
+
+        function formatJson(matrix) {
+          const json = JSON.stringify(
+            {
+              rows: ROWS,
+              cols: COLS,
+              columns: colLabels,
+              matrix,
+              elements: state.elements
+            },
+            null,
+            2
+          );
+          return state.wrapExports ? ['```json', json, '```'].join('\n') : json;
+        }
+
+        function updateExports(matrix) {
+          asciiOutput.value = formatAscii(matrix);
+          jsonOutput.value = formatJson(matrix);
+        }
+
+        function findSelectedElement() {
+          if (!state.selectedId) return null;
+          return state.elements.find((e) => e.id === state.selectedId) || null;
+        }
+
+        function syncSelectionPanel() {
+          const selected = findSelectedElement();
+          const selectedEls = getSelectedElements();
+          const has = Boolean(selected || selectedEls.length > 0);
+          const multi = isMultiSelect();
+
+          selectedLabelInput.disabled = !has || multi;
+          selectedCodeInput.disabled = !has || multi;
+          selectedColorInput.disabled = !has || multi;
+          duplicateSelectedBtn.disabled = !has;
+          deleteSelectedBtn.disabled = !has;
+          sendBackBtn.disabled = !has || multi;
+          bringFrontBtn.disabled = !has || multi;
+          elementNotesInput.disabled = !has || multi;
+          addNoteBtn.disabled = !has || multi;
+
+          // Show alignment tools only for multi-select
+          if (multi) {
+            alignmentToolsEl.style.display = 'grid';
+          } else {
+            alignmentToolsEl.style.display = 'none';
+          }
+
+          // Show merge button only for multi-select
+          if (multi) {
+            mergeSelectedBtn.style.display = 'block';
+            mergeSelectedBtn.disabled = false;
+          } else {
+            mergeSelectedBtn.style.display = 'none';
+          }
+
+          if (!has) {
+            selectedLabelInput.value = '';
+            selectedCodeInput.value = '';
+            selectedColorInput.value = '';
+            selectedBoundsEl.textContent = '--';
+            elementNotesInput.value = '';
+            return;
+          }
+
+          if (multi) {
+            selectedLabelInput.value = '';
+            selectedCodeInput.value = '';
+            selectedColorInput.value = '';
+            selectedBoundsEl.textContent = `${selectedEls.length} selected`;
+            elementNotesInput.value = '';
+          } else if (selected) {
+            selectedLabelInput.value = selected.label || '';
+            selectedCodeInput.value = selected.code || '';
+            selectedColorInput.value = rgbToHex(selected.color || COLOR_PALETTE[0].value);
+            selectedBoundsEl.textContent = `${selected.startRow},${selected.startCol} → ${selected.endRow},${selected.endCol}`;
+            elementNotesInput.value = selected.notes || '';
+          }
+        }
+
+        function rgbToHex(rgb) {
+          // Convert rgba(r, g, b, a) to #rrggbb
+          const match = rgb.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+          if (!match) return '#a4a0c4';
+          const r = parseInt(match[1]).toString(16).padStart(2, '0');
+          const g = parseInt(match[2]).toString(16).padStart(2, '0');
+          const b = parseInt(match[3]).toString(16).padStart(2, '0');
+          return `#${r}${g}${b}`;
+        }
+
+        function hexToRgba(hex, alpha = 0.35) {
+          const r = parseInt(hex.slice(1, 3), 16);
+          const g = parseInt(hex.slice(3, 5), 16);
+          const b = parseInt(hex.slice(5, 7), 16);
+          return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        function pushUndo() {
+          state.history.undo.push(captureSnapshot());
+          if (state.history.undo.length > 100) state.history.undo.shift();
+          state.history.redo = [];
+        }
+
+        function captureSnapshot() {
+          return {
+            mode: state.mode,
+            elements: state.elements.map((e) => ({ ...e })),
+            panX: state.panX,
+            panY: state.panY,
+            zoom: state.zoom,
+            selectedId: state.selectedId,
+            allowOverlap: state.allowOverlap,
+            wrapExports: state.wrapExports,
+            activeLabel: labelInput.value
+          };
+        }
+
+        function applySnapshot(snap) {
+          state.mode = snap.mode === 'erase' ? 'erase' : 'draw';
+          state.elements = Array.isArray(snap.elements) ? snap.elements.map((e) => ({ ...e })) : [];
+          state.panX = Number.isFinite(snap.panX) ? snap.panX : 120;
+          state.panY = Number.isFinite(snap.panY) ? snap.panY : 80;
+          state.zoom = Number.isFinite(snap.zoom) ? Math.min(4, Math.max(0.4, snap.zoom)) : 1;
+          state.selectedId = typeof snap.selectedId === 'string' ? snap.selectedId : null;
+          if (state.selectedId && !state.elements.some((e) => e.id === state.selectedId)) state.selectedId = null;
+          state.allowOverlap = Boolean(snap.allowOverlap);
+          allowOverlapToggle.checked = state.allowOverlap;
+          state.wrapExports = snap.wrapExports !== false;
+          exportFencesToggle.checked = state.wrapExports;
+          if (typeof snap.activeLabel === 'string') labelInput.value = snap.activeLabel;
+          syncSelectionPanel();
+          markDirty({ exports: true, list: true });
+        }
+
+        function undo() {
+          if (state.history.undo.length === 0) return;
+          state.history.redo.push(captureSnapshot());
+          applySnapshot(state.history.undo.pop());
+          rerender();
+          scheduleAutosave();
+        }
+
+        function redo() {
+          if (state.history.redo.length === 0) return;
+          state.history.undo.push(captureSnapshot());
+          applySnapshot(state.history.redo.pop());
+          rerender();
+          scheduleAutosave();
+        }
+
+        function renderElementsList() {
+          const filteredElements = state.elements.filter((el) => {
+            if (!state.elementSearchQuery) return true;
+            const query = state.elementSearchQuery.toLowerCase();
+            return (
+              el.label.toLowerCase().includes(query) ||
+              el.code.toLowerCase().includes(query)
+            );
+          });
+
+          elementsCountEl.textContent = `${filteredElements.length} of ${state.elements.length}`;
+          elementsListEl.innerHTML = '';
+          if (filteredElements.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'opacity-80';
+            empty.textContent = state.elementSearchQuery ? '(no matches)' : '(none)';
+            elementsListEl.appendChild(empty);
+            return;
+          }
+
+          const frag = document.createDocumentFragment();
+          filteredElements
+            .slice()
+            .reverse()
+            .forEach((el) => {
+              const btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className =
+                'w-full text-left panel px-2 py-1 text-xs flex items-center justify-between gap-2 hover:opacity-90';
+              btn.dataset.id = el.id;
+              const left = document.createElement('div');
+              left.className = 'flex items-center gap-2 min-w-0';
+
+              const colorBox = document.createElement('span');
+              colorBox.className = 'inline-block';
+              colorBox.style.width = '12px';
+              colorBox.style.height = '12px';
+              colorBox.style.background = el.color || COLOR_PALETTE[0].value;
+              colorBox.style.border = '1px solid var(--c64-border)';
+              left.appendChild(colorBox);
+
+              const code = document.createElement('span');
+              code.className = 'heading';
+              code.textContent = `[${el.code}]`;
+              const label = document.createElement('span');
+              label.className = 'truncate';
+              label.textContent = el.label;
+              left.appendChild(code);
+              left.appendChild(label);
+
+              const right = document.createElement('span');
+              right.className = 'opacity-80';
+              right.textContent = `${el.startRow},${el.startCol}-${el.endRow},${el.endCol}`;
+
+              btn.appendChild(left);
+              btn.appendChild(right);
+              if (el.id === state.selectedId || state.selectedIds.includes(el.id)) {
+                btn.style.boxShadow = 'inset 0 0 0 2px var(--c64-heading)';
+              }
+              btn.addEventListener('click', () => {
+                state.selectedId = el.id;
+                state.selectedIds = [];
+                syncSelectionPanel();
+                markDirty({ list: true });
+                rerender();
+              });
+              frag.appendChild(btn);
+            });
+          elementsListEl.appendChild(frag);
+        }
+
+        function rerender() {
+          const { matrix: occupancy, owner } = buildOccupancy();
+          const previews = previewSet();
+          const overlapPreview = new Set();
+          if (previews.size && !state.allowOverlap) {
+            previews.forEach((key) => {
+              const [r, c] = key.split('-').map((n) => Number(n));
+              if (occupancy[r - 1]?.[c - 1] && occupancy[r - 1][c - 1] !== '.') {
+                overlapPreview.add(key);
+              }
+            });
+          }
+          const hovered = state.hoveredCell ? `${state.hoveredCell.row}-${state.hoveredCell.col}` : null;
+
+          const cells = gridEl.querySelectorAll('.cell');
+          cells.forEach((cellEl) => {
+            const row = Number(cellEl.dataset.row);
+            const col = Number(cellEl.dataset.col);
+            const key = `${row}-${col}`;
+            const code = occupancy[row - 1][col - 1];
+            const ownerId = owner[row - 1][col - 1];
+            const ownerEl = ownerId ? state.elements.find((e) => e.id === ownerId) : null;
+
+            cellEl.textContent = code === '.' ? '' : code;
+            cellEl.classList.toggle('occupied', code !== '.');
+            cellEl.classList.toggle('hover-highlight', state.mode === 'draw' && hovered === key);
+            cellEl.classList.toggle('preview', previews.has(key));
+            cellEl.classList.toggle('overlap', overlapPreview.has(key));
+            cellEl.classList.toggle('selected', ownerId === state.selectedId || state.selectedIds.includes(ownerId));
+
+            // Apply element color
+            if (ownerEl && ownerEl.color) {
+              cellEl.style.background = code !== '.' ? ownerEl.color : 'transparent';
+            } else if (code !== '.') {
+              cellEl.style.background = 'rgba(164, 160, 196, 0.25)';
+            } else {
+              cellEl.style.background = 'transparent';
+            }
+          });
+
+          canvasRootEl.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
+          drawBtn.classList.toggle('active', state.mode === 'draw');
+          eraseBtn.classList.toggle('active', state.mode === 'erase');
+          dragToolBtn.classList.toggle('active', state.mode === 'drag');
+          resizeToolBtn.classList.toggle('active', state.mode === 'resize');
+
+          let cursor = 'crosshair';
+          if (state.isPanning) {
+            cursor = 'grabbing';
+          } else if (state.mode === 'erase') {
+            cursor = 'not-allowed';
+          } else if (state.mode === 'drag') {
+            cursor = state.isDragging ? 'grabbing' : 'grab';
+          } else if (state.mode === 'resize') {
+            cursor = 'nwse-resize';
+          }
+          viewportEl.style.cursor = cursor;
+
+          undoBtn.disabled = state.history.undo.length === 0;
+          redoBtn.disabled = state.history.redo.length === 0;
+          if (state.dirty.exports) {
+            updateExports(occupancy);
+            state.dirty.exports = false;
+          }
+          if (state.dirty.list) {
+            renderElementsList();
+            state.dirty.list = false;
+          }
+          updateInfoLine();
+        }
+
+        function setupGrid() {
+          const frag = document.createDocumentFragment();
+
+          const corner = document.createElement('div');
+          corner.className = 'corner';
+          corner.textContent = '#';
+          frag.appendChild(corner);
+
+          for (let col = 1; col <= COLS; col += 1) {
+            const axis = document.createElement('div');
+            axis.className = 'axis';
+            axis.textContent = colLabels[col - 1];
+            frag.appendChild(axis);
+          }
+
+          for (let row = 1; row <= ROWS; row += 1) {
+            const axis = document.createElement('div');
+            axis.className = 'axis';
+            axis.textContent = row;
+            frag.appendChild(axis);
+
+            for (let col = 1; col <= COLS; col += 1) {
+              const cell = document.createElement('div');
+              cell.className = 'cell';
+              cell.dataset.row = String(row);
+              cell.dataset.col = String(col);
+              frag.appendChild(cell);
+            }
+          }
+
+          gridEl.innerHTML = '';
+          gridEl.appendChild(frag);
+          gridEl.style.gridTemplateColumns = `40px repeat(${COLS}, 40px)`;
+          gridEl.style.gridTemplateRows = `40px repeat(${ROWS}, 40px)`;
+        }
+
+        function rebuildGrid(newRows, newCols) {
+          ROWS = newRows;
+          COLS = newCols;
+          state.rows = newRows;
+          state.cols = newCols;
+
+          // Rebuild colLabels
+          colLabels.length = 0;
+          for (let i = 0; i < COLS; i += 1) {
+            colLabels.push(getColumnLabel(i));
+          }
+
+          setupGrid();
+          markDirty({ exports: true });
+          rerender();
+          logMessage(`Grid resized to ${newRows}x${newCols}`, 'info');
+        }
+
+        function findContainingElementIndex(row, col) {
+          for (let i = state.elements.length - 1; i >= 0; i -= 1) {
+            const element = state.elements[i];
+            if (
+              row >= element.startRow &&
+              row <= element.endRow &&
+              col >= element.startCol &&
+              col <= element.endCol
+            ) {
+              return i;
+            }
+          }
+          return -1;
+        }
+
+        function findContainingElementHitIndices(row, col) {
+          const hits = [];
+          for (let i = state.elements.length - 1; i >= 0; i -= 1) {
+            const element = state.elements[i];
+            if (
+              row >= element.startRow &&
+              row <= element.endRow &&
+              col >= element.startCol &&
+              col <= element.endCol
+            ) {
+              hits.push(i);
+            }
+          }
+          return hits;
+        }
+
+        function rectOverlapsAny(rect, ignoreId = null) {
+          for (let i = 0; i < state.elements.length; i += 1) {
+            const e = state.elements[i];
+            if (ignoreId && e.id === ignoreId) continue;
+            const overlaps =
+              rect.startRow <= e.endRow &&
+              rect.endRow >= e.startRow &&
+              rect.startCol <= e.endCol &&
+              rect.endCol >= e.startCol;
+            if (overlaps) return true;
+          }
+          return false;
+        }
+
+        function onCellPointerDown(event, row, col) {
+          if (event.button !== 0) return;
+          if (state.spacePressed) {
+            startPan(event);
+            return;
+          }
+          if (state.mode === 'erase') {
+            const idx = findContainingElementIndex(row, col);
+            if (idx !== -1) {
+              pushUndo();
+              state.elements.splice(idx, 1);
+              if (state.selectedId && !state.elements.some((e) => e.id === state.selectedId)) {
+                state.selectedId = null;
+                syncSelectionPanel();
+              }
+              state.selectedIds = state.selectedIds.filter((id) => state.elements.some((e) => e.id === id));
+              markDirty({ exports: true, list: true });
+              rerender();
+              scheduleAutosave();
+              logMessage('Element erased', 'info');
+            }
+            return;
+          }
+
+          // Handle drag mode
+          if (state.mode === 'drag') {
+            const idx = findContainingElementIndex(row, col);
+            if (idx !== -1) {
+              const element = state.elements[idx];
+              pushUndo();
+              state.isDragging = true;
+              state.dragStartCell = { row, col };
+              state.dragOffset = {
+                row: row - element.startRow,
+                col: col - element.startCol
+              };
+              state.selectedId = element.id;
+              state.selectedIds = [];
+              syncSelectionPanel();
+              rerender();
+            }
+            return;
+          }
+
+          // Handle resize mode
+          if (state.mode === 'resize') {
+            const idx = findContainingElementIndex(row, col);
+            if (idx !== -1) {
+              const element = state.elements[idx];
+              pushUndo();
+              state.isResizing = true;
+              state.resizeStartCell = { row, col };
+              state.ghostElement = { ...element };
+              state.selectedId = element.id;
+              state.selectedIds = [];
+              syncSelectionPanel();
+              rerender();
+            }
+            return;
+          }
+
+          if (!event.shiftKey) {
+            const hits = findContainingElementHitIndices(row, col);
+            if (hits.length) {
+              let nextIndex = hits[0];
+              if (event.altKey && state.selectedId) {
+                const selectedHit = hits.findIndex((i) => state.elements[i]?.id === state.selectedId);
+                if (selectedHit !== -1) nextIndex = hits[(selectedHit + 1) % hits.length];
+              }
+              const clickedId = state.elements[nextIndex].id;
+
+              // Handle Ctrl/Cmd+click for multi-select
+              if (event.ctrlKey || event.metaKey) {
+                if (state.selectedIds.includes(clickedId)) {
+                  // Deselect if already selected
+                  state.selectedIds = state.selectedIds.filter((id) => id !== clickedId);
+                  if (state.selectedIds.length === 0) {
+                    state.selectedId = null;
+                  }
+                } else {
+                  // Add to selection
+                  if (!state.selectedIds.includes(clickedId)) {
+                    state.selectedIds.push(clickedId);
+                  }
+                  if (state.selectedId && !state.selectedIds.includes(state.selectedId)) {
+                    state.selectedIds.push(state.selectedId);
+                  }
+                  state.selectedId = null;
+                }
+              } else {
+                // Single select
+                state.selectedId = clickedId;
+                state.selectedIds = [];
+              }
+
+              syncSelectionPanel();
+              markDirty({ list: true });
+              rerender();
+              return;
+            }
+          }
+
+          state.isMouseDrawing = true;
+          state.drawingStart = { row, col };
+          state.drawingEnd = { row, col };
+          rerender();
+        }
+
+        function onCellPointerEnter(row, col) {
+          state.hoveredCell = { row, col };
+          if (state.isMouseDrawing) {
+            state.drawingEnd = { row, col };
+          }
+          if (state.isDragging && state.selectedId && state.dragOffset) {
+            const selected = findSelectedElement();
+            if (selected) {
+              const newStartRow = row - state.dragOffset.row;
+              const newStartCol = col - state.dragOffset.col;
+              const width = selected.endCol - selected.startCol;
+              const height = selected.endRow - selected.startRow;
+
+              selected.startRow = Math.max(1, Math.min(ROWS, newStartRow));
+              selected.startCol = Math.max(1, Math.min(COLS, newStartCol));
+              selected.endRow = Math.min(ROWS, selected.startRow + height);
+              selected.endCol = Math.min(COLS, selected.startCol + width);
+
+              markDirty({ exports: true, list: true });
+            }
+          }
+          if (state.isResizing && state.selectedId && state.resizeStartCell) {
+            const selected = findSelectedElement();
+            if (selected) {
+              const rowDiff = row - state.resizeStartCell.row;
+              const colDiff = col - state.resizeStartCell.col;
+
+              selected.endRow = Math.max(selected.startRow, Math.min(ROWS, selected.endRow + rowDiff));
+              selected.endCol = Math.max(selected.startCol, Math.min(COLS, selected.endCol + colDiff));
+
+              state.resizeStartCell = { row, col };
+              markDirty({ exports: true, list: true });
+            }
+          }
+          rerender();
+        }
+
+        function onPointerUpAnywhere() {
+          if (state.isMouseDrawing && state.drawingStart && state.drawingEnd) {
+            // Validate title
+            const labelValue = labelInput.value.trim();
+            if (!labelValue) {
+              labelInput.classList.add('input-error');
+              setTimeout(() => labelInput.classList.remove('input-error'), 300);
+              setStatus('Title is required to draw an object');
+              logMessage('Drawing blocked: Title is required', 'warning');
+              state.isMouseDrawing = false;
+              state.drawingStart = null;
+              state.drawingEnd = null;
+              rerender();
+              return;
+            }
+
+            const rect = normalizeRect(state.drawingStart, state.drawingEnd);
+            if (!state.allowOverlap && rectOverlapsAny(rect)) {
+              setStatus('Overlap blocked (toggle Allow Overlap to permit).');
+              logMessage('Drawing blocked: Overlap detected', 'warning');
+            } else {
+              pushUndo();
+              const newEl = {
+                id: makeId(),
+                label: sanitizeLabel(labelInput.value),
+                code: generateUniqueCode(labelInput.value),
+                color: state.selectedColor,
+                type: state.objectType,
+                notes: '',
+                ...rect
+              };
+              state.elements.push(newEl);
+              state.selectedId = newEl.id;
+              state.selectedIds = [];
+              syncSelectionPanel();
+              markDirty({ exports: true, list: true });
+              scheduleAutosave();
+              logMessage(`Element created: ${newEl.label} [${newEl.code}]`, 'info');
+            }
+          }
+
+          if (state.isDragging) {
+            const selected = findSelectedElement();
+            if (selected) {
+              logMessage(`Element dragged: ${selected.label} [${selected.code}]`, 'info');
+            }
+            state.isDragging = false;
+            state.dragStartCell = null;
+            state.dragOffset = null;
+            state.ghostElement = null;
+            scheduleAutosave();
+          }
+
+          if (state.isResizing) {
+            const selected = findSelectedElement();
+            if (selected) {
+              logMessage(`Element resized: ${selected.label} [${selected.code}]`, 'info');
+            }
+            state.isResizing = false;
+            state.resizeStartCell = null;
+            state.ghostElement = null;
+            scheduleAutosave();
+          }
+
+          state.isMouseDrawing = false;
+          state.drawingStart = null;
+          state.drawingEnd = null;
+
+          if (state.isPanning) {
+            state.isPanning = false;
+            state.panPointerId = null;
+            scheduleAutosave();
+          }
+
+          rerender();
+        }
+
+        function startPan(event) {
+          state.isPanning = true;
+          state.panPointerId = event.pointerId || null;
+          state.panStartMouseX = event.clientX;
+          state.panStartMouseY = event.clientY;
+          state.panOriginX = state.panX;
+          state.panOriginY = state.panY;
+          rerender();
+        }
+
+        function onViewportPointerDown(event) {
+          const isMiddleButton = event.button === 1;
+          const spaceLeft = state.spacePressed && event.button === 0;
+          if (!isMiddleButton && !spaceLeft) return;
+
+          event.preventDefault();
+          startPan(event);
+        }
+
+        function onViewportPointerMove(event) {
+          if (!state.isPanning) return;
+          if (state.panPointerId !== null && event.pointerId !== state.panPointerId) return;
+
+          state.panX = state.panOriginX + (event.clientX - state.panStartMouseX);
+          state.panY = state.panOriginY + (event.clientY - state.panStartMouseY);
+          rerender();
+        }
+
+        function onViewportWheel(event) {
+          event.preventDefault();
+
+          const rect = viewportEl.getBoundingClientRect();
+          const pointerX = event.clientX - rect.left;
+          const pointerY = event.clientY - rect.top;
+
+          const prevZoom = state.zoom;
+          const delta = -event.deltaY;
+          const factor = delta > 0 ? 1.1 : 0.9;
+          const nextZoom = Math.min(4, Math.max(0.4, prevZoom * factor));
+          if (nextZoom === prevZoom) return;
+
+          const worldX = (pointerX - state.panX) / prevZoom;
+          const worldY = (pointerY - state.panY) / prevZoom;
+
+          state.zoom = nextZoom;
+          state.panX = pointerX - worldX * nextZoom;
+          state.panY = pointerY - worldY * nextZoom;
+
+          rerender();
+          scheduleAutosave();
+        }
+
+        function yamlScalar(value) {
+          if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+          if (value === null || value === undefined) return 'null';
+          const text = String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+          return `"${text}"`;
+        }
+
+        function stringifyYaml(value, indent = 0) {
+          const pad = ' '.repeat(indent);
+          if (Array.isArray(value)) {
+            return value
+              .map((item) => {
+                if (item && typeof item === 'object') {
+                  return `${pad}-\n${stringifyYaml(item, indent + 2)}`;
+                }
+                return `${pad}- ${yamlScalar(item)}`;
+              })
+              .join('\n');
+          }
+          if (value && typeof value === 'object') {
+            return Object.entries(value)
+              .map(([key, v]) => {
+                if (v && typeof v === 'object') {
+                  return `${pad}${key}:\n${stringifyYaml(v, indent + 2)}`;
+                }
+                return `${pad}${key}: ${yamlScalar(v)}`;
+              })
+              .join('\n');
+          }
+          return `${pad}${yamlScalar(value)}`;
+        }
+
+        function parseYamlScalar(value) {
+          const trimmed = value.trim();
+          if (trimmed === 'null') return null;
+          if (trimmed === 'true') return true;
+          if (trimmed === 'false') return false;
+          if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+          if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+            return trimmed.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+          }
+          return trimmed;
+        }
+
+        function parseSimpleYaml(text) {
+          const lines = text
+            .split('\n')
+            .map((line) => line.replace(/\t/g, '  '))
+            .filter((line) => line.trim() && !line.trim().startsWith('#'));
+
+          function lineIndent(line) {
+            return line.match(/^ */)[0].length;
+          }
+
+          function parseBlock(startIndex, indent) {
+            if (startIndex >= lines.length) return [null, startIndex];
+            const sequence = lines[startIndex].trim().startsWith('-');
+            const container = sequence ? [] : {};
+            let i = startIndex;
+
+            while (i < lines.length) {
+              const line = lines[i];
+              const currentIndent = lineIndent(line);
+              if (currentIndent < indent) break;
+              if (currentIndent > indent) throw new Error('Invalid YAML indentation.');
+
+              const trimmed = line.trim();
+              if (sequence) {
+                if (!trimmed.startsWith('-')) break;
+                const payload = trimmed.slice(1).trim();
+                if (!payload) {
+                  const [nested, nextIndex] = parseBlock(i + 1, indent + 2);
+                  container.push(nested);
+                  i = nextIndex;
+                  continue;
+                }
+                if (payload.includes(':')) {
+                  const [firstKey, ...rest] = payload.split(':');
+                  const firstVal = rest.join(':').trim();
+                  const item = {};
+                  if (firstVal) item[firstKey.trim()] = parseYamlScalar(firstVal);
+                  i += 1;
+                  while (i < lines.length) {
+                    const nextLine = lines[i];
+                    const nextIndent = lineIndent(nextLine);
+                    if (nextIndent < indent + 2) break;
+                    if (nextIndent > indent + 2) throw new Error('Invalid YAML indentation.');
+                    const nextTrimmed = nextLine.trim();
+                    if (nextTrimmed.startsWith('- ')) break;
+                    const [k, ...r] = nextTrimmed.split(':');
+                    const v = r.join(':').trim();
+                    if (v) {
+                      item[k.trim()] = parseYamlScalar(v);
+                      i += 1;
+                    } else {
+                      const [nested, nextIndex] = parseBlock(i + 1, indent + 4);
+                      item[k.trim()] = nested;
+                      i = nextIndex;
+                    }
+                  }
+                  container.push(item);
+                  continue;
+                }
+                container.push(parseYamlScalar(payload));
+                i += 1;
+                continue;
+              }
+
+              const [key, ...rest] = trimmed.split(':');
+              const remainder = rest.join(':').trim();
+              if (remainder) {
+                container[key.trim()] = parseYamlScalar(remainder);
+                i += 1;
+                continue;
+              }
+              const [nested, nextIndex] = parseBlock(i + 1, indent + 2);
+              container[key.trim()] = nested;
+              i = nextIndex;
+            }
+
+            return [container, i];
+          }
+
+          const [parsed] = parseBlock(0, 0);
+          return parsed;
+        }
+
+        function serializeStatePayload() {
+          return {
+            meta: {
+              app: 'Textual-Vision',
+              format: 'c64-canvas',
+              version: 1
+            },
+            canvas: {
+              rows: ROWS,
+              cols: COLS,
+              columns: colLabels,
+              transform: {
+                panX: state.panX,
+                panY: state.panY,
+                zoom: state.zoom
+              }
+            },
+            ui: {
+              mode: state.mode,
+              activeLabel: sanitizeLabel(labelInput.value),
+              allowOverlap: state.allowOverlap,
+              wrapExports: state.wrapExports
+            },
+            elements: state.elements
+          };
+        }
+
+        function downloadYaml() {
+          const yamlText = stringifyYaml(serializeStatePayload());
+          const blob = new Blob([yamlText], { type: 'text/yaml;charset=utf-8' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = 'c64-layout.yaml';
+          link.click();
+          setTimeout(() => URL.revokeObjectURL(link.href), 250);
+        }
+
+        function applyLoadedState(payload) {
+          if (!payload || typeof payload !== 'object') {
+            throw new Error('Invalid YAML structure.');
+          }
+
+          const elements = Array.isArray(payload.elements) ? payload.elements : [];
+          state.elements = elements
+            .map((item) => ({
+              id: item.id || makeId(),
+              label: sanitizeLabel(item.label),
+              code: String(item.code || '').toUpperCase().slice(0, 2),
+              startRow: Number(item.startRow),
+              endRow: Number(item.endRow),
+              startCol: Number(item.startCol),
+              endCol: Number(item.endCol),
+              color: item.color || COLOR_PALETTE[0].value,
+              type: item.type || 'Web-Object',
+              notes: item.notes || ''
+            }))
+            .filter((item) => {
+              return (
+                item.code.length === 2 &&
+                Number.isInteger(item.startRow) &&
+                Number.isInteger(item.endRow) &&
+                Number.isInteger(item.startCol) &&
+                Number.isInteger(item.endCol) &&
+                item.startRow >= 1 &&
+                item.endRow <= ROWS &&
+                item.startCol >= 1 &&
+                item.endCol <= COLS &&
+                item.startRow <= item.endRow &&
+                item.startCol <= item.endCol
+              );
+            });
+
+          const transform = payload.canvas?.transform || {};
+          state.panX = Number.isFinite(transform.panX) ? transform.panX : 120;
+          state.panY = Number.isFinite(transform.panY) ? transform.panY : 80;
+          state.zoom = Number.isFinite(transform.zoom) ? Math.min(4, Math.max(0.4, transform.zoom)) : 1;
+          state.mode = payload.ui?.mode === 'erase' ? 'erase' : 'draw';
+          state.allowOverlap = Boolean(payload.ui?.allowOverlap);
+          allowOverlapToggle.checked = state.allowOverlap;
+          state.wrapExports = payload.ui?.wrapExports !== false;
+          exportFencesToggle.checked = state.wrapExports;
+
+          if (typeof payload.ui?.activeLabel === 'string') {
+            labelInput.value = payload.ui.activeLabel;
+          }
+
+          state.isMouseDrawing = false;
+          state.drawingStart = null;
+          state.drawingEnd = null;
+          state.selectedId = null;
+          syncSelectionPanel();
+
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        }
+
+        saveYamlBtn.addEventListener('click', downloadYaml);
+
+        copyYamlBtn.addEventListener('click', async () => {
+          try {
+            await copyText(stringifyYaml(serializeStatePayload()));
+            setStatus('YAML copied.');
+          } catch (error) {
+            setStatus('Copy failed.');
+          }
+        });
+
+        openYamlInput.addEventListener('change', async (event) => {
+          const file = event.target.files?.[0];
+          if (!file) return;
+          try {
+            const text = await file.text();
+            const parsed = parseSimpleYaml(text);
+            pushUndo();
+            applyLoadedState(parsed);
+            setStatus('YAML loaded.');
+          } catch (error) {
+            alert(`Unable to load YAML: ${error.message}`);
+          } finally {
+            openYamlInput.value = '';
+          }
+        });
+
+        drawBtn.addEventListener('click', () => {
+          state.mode = 'draw';
+          rerender();
+        });
+
+        eraseBtn.addEventListener('click', () => {
+          state.mode = 'erase';
+          rerender();
+        });
+
+        dragToolBtn.addEventListener('click', () => {
+          state.mode = 'drag';
+          rerender();
+        });
+
+        resizeToolBtn.addEventListener('click', () => {
+          state.mode = 'resize';
+          rerender();
+        });
+
+        applyGridSizeBtn.addEventListener('click', () => {
+          const newRows = parseInt(gridRowsInput.value, 10);
+          const newCols = parseInt(gridColsInput.value, 10);
+          if (isNaN(newRows) || isNaN(newCols) || newRows < 4 || newRows > 64 || newCols < 4 || newCols > 64) {
+            setStatus('Invalid grid size. Use 4-64 for rows and columns.');
+            return;
+          }
+          pushUndo();
+          rebuildGrid(newRows, newCols);
+          setStatus(`Grid resized to ${newRows}x${newCols}`);
+          scheduleAutosave();
+        });
+
+        addNoteBtn.addEventListener('click', () => {
+          const selected = findSelectedElement();
+          if (!selected) return;
+          pushUndo();
+          selected.notes = elementNotesInput.value;
+          markDirty({ exports: true });
+          scheduleAutosave();
+          setStatus('Note saved.');
+          logMessage(`Note added to element ${selected.label}`, 'info');
+        });
+
+        elementNotesInput.addEventListener('change', () => {
+          const selected = findSelectedElement();
+          if (!selected) return;
+          pushUndo();
+          selected.notes = elementNotesInput.value;
+          markDirty({ exports: true });
+          scheduleAutosave();
+        });
+
+        mergeSelectedBtn.addEventListener('click', () => {
+          if (state.selectedIds.length < 2) return;
+          pushUndo();
+
+          const selectedEls = getSelectedElements();
+          const first = selectedEls[0];
+
+          const minRow = Math.min(...selectedEls.map(e => e.startRow));
+          const minCol = Math.min(...selectedEls.map(e => e.startCol));
+          const maxRow = Math.max(...selectedEls.map(e => e.endRow));
+          const maxCol = Math.max(...selectedEls.map(e => e.endCol));
+
+          // Remove all selected elements
+          state.elements = state.elements.filter(e => !state.selectedIds.includes(e.id));
+
+          // Create merged element
+          const merged = {
+            id: makeId(),
+            label: first.label,
+            code: generateUniqueCode(first.label),
+            color: first.color,
+            type: first.type || state.objectType,
+            notes: first.notes || '',
+            startRow: minRow,
+            startCol: minCol,
+            endRow: maxRow,
+            endCol: maxCol
+          };
+
+          state.elements.push(merged);
+          state.selectedId = merged.id;
+          state.selectedIds = [];
+
+          syncSelectionPanel();
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+          setStatus('Elements merged.');
+          logMessage(`Merged ${selectedEls.length} elements into ${merged.label} [${merged.code}]`, 'info');
+        });
+
+        objectTypeInput.addEventListener('change', () => {
+          state.objectType = objectTypeInput.value;
+          scheduleAutosave();
+        });
+
+        clearBtn.addEventListener('click', () => {
+          if (state.elements.length === 0) return;
+          if (!confirm('Clear the canvas? This can be undone.')) return;
+          pushUndo();
+          const count = state.elements.length;
+          state.elements = [];
+          state.isMouseDrawing = false;
+          state.drawingStart = null;
+          state.drawingEnd = null;
+          state.selectedId = null;
+          syncSelectionPanel();
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+          logMessage(`Canvas cleared: ${count} elements removed`, 'info');
+        });
+
+        allowOverlapToggle.addEventListener('change', () => {
+          pushUndo();
+          state.allowOverlap = allowOverlapToggle.checked;
+          rerender();
+          scheduleAutosave();
+        });
+
+        exportFencesToggle.addEventListener('change', () => {
+          state.wrapExports = exportFencesToggle.checked;
+          markDirty({ exports: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        pasteYamlBtn.addEventListener('click', () => {
+          const text = prompt('Paste YAML exported from this app:', '');
+          if (!text) return;
+          try {
+            const parsed = parseSimpleYaml(text);
+            pushUndo();
+            applyLoadedState(parsed);
+            setStatus('YAML loaded.');
+          } catch (error) {
+            alert(`Unable to load YAML: ${error.message}`);
+          }
+        });
+
+        autosaveToggle.addEventListener('change', () => {
+          state.autosaveEnabled = autosaveToggle.checked;
+          if (state.autosaveEnabled) {
+            scheduleAutosave();
+            setStatus('Autosave enabled.');
+          } else {
+            setStatus('Autosave disabled.');
+          }
+        });
+
+        clearAutosaveBtn.addEventListener('click', () => {
+          try {
+            const exists = Boolean(localStorage.getItem(AUTOSAVE_KEY));
+            if (!exists) {
+              setStatus('No local save found.');
+              return;
+            }
+            if (!confirm('Clear local autosave?')) return;
+            localStorage.removeItem(AUTOSAVE_KEY);
+            setStatus('Local save cleared.');
+          } catch (error) {
+            setStatus('Unable to clear local save.');
+          }
+        });
+
+        undoBtn.addEventListener('click', undo);
+        redoBtn.addEventListener('click', redo);
+
+        resetViewBtn.addEventListener('click', () => {
+          pushUndo();
+          state.panX = 120;
+          state.panY = 80;
+          state.zoom = 1;
+          rerender();
+          scheduleAutosave();
+        });
+
+        fitViewBtn.addEventListener('click', () => {
+          if (state.elements.length === 0) {
+            setStatus('Nothing to fit.');
+            return;
+          }
+          const minRow = Math.min(...state.elements.map((e) => e.startRow));
+          const minCol = Math.min(...state.elements.map((e) => e.startCol));
+          const maxRow = Math.max(...state.elements.map((e) => e.endRow));
+          const maxCol = Math.max(...state.elements.map((e) => e.endCol));
+
+          const contentW = (maxCol - minCol + 1) * CELL_SIZE;
+          const contentH = (maxRow - minRow + 1) * CELL_SIZE;
+          const contentX = AXIS_SIZE + (minCol - 1) * CELL_SIZE;
+          const contentY = AXIS_SIZE + (minRow - 1) * CELL_SIZE;
+
+          const viewportW = viewportEl.clientWidth || 1;
+          const viewportH = viewportEl.clientHeight || 1;
+          const pad = 60;
+          const scaleX = (viewportW - pad * 2) / contentW;
+          const scaleY = (viewportH - pad * 2) / contentH;
+          const nextZoom = Math.min(4, Math.max(0.4, Math.min(scaleX, scaleY)));
+
+          pushUndo();
+          state.zoom = nextZoom;
+          state.panX = viewportW / 2 - (contentX + contentW / 2) * nextZoom;
+          state.panY = viewportH / 2 - (contentY + contentH / 2) * nextZoom;
+          rerender();
+          scheduleAutosave();
+        });
+
+        selectedLabelInput.addEventListener('change', () => {
+          const selected = findSelectedElement();
+          if (!selected) return;
+          const nextLabel = sanitizeLabel(selectedLabelInput.value);
+          selectedLabelInput.value = nextLabel;
+          if (nextLabel === selected.label) return;
+          pushUndo();
+          selected.label = nextLabel;
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        selectedCodeInput.addEventListener('change', () => {
+          const selected = findSelectedElement();
+          if (!selected) return;
+          const raw = String(selectedCodeInput.value || '').toUpperCase();
+          const cleaned = raw.replace(/[^A-Z0-9]/g, '').slice(0, 2);
+          if (cleaned !== raw) selectedCodeInput.value = cleaned;
+          if (cleaned.length !== 2) return;
+          if (codeExistsOther(cleaned, selected.id)) {
+            setStatus('Code already in use.');
+            selectedCodeInput.value = selected.code;
+            return;
+          }
+          if (cleaned !== selected.code) {
+            pushUndo();
+            selected.code = cleaned;
+            markDirty({ exports: true, list: true });
+            rerender();
+            scheduleAutosave();
+          }
+        });
+
+        selectedColorInput.addEventListener('change', () => {
+          const selected = findSelectedElement();
+          if (!selected) return;
+          const newColor = hexToRgba(selectedColorInput.value);
+          if (newColor !== selected.color) {
+            pushUndo();
+            selected.color = newColor;
+            markDirty({ exports: true, list: true });
+            rerender();
+            scheduleAutosave();
+          }
+        });
+
+        elementSearchInput.addEventListener('input', () => {
+          state.elementSearchQuery = elementSearchInput.value;
+          markDirty({ list: true });
+          rerender();
+        });
+
+        duplicateSelectedBtn.addEventListener('click', () => {
+          const selected = findSelectedElement();
+          if (!selected) return;
+          const clone = {
+            ...selected,
+            id: makeId(),
+            code: generateUniqueCode(selected.label)
+          };
+          pushUndo();
+          state.elements.push(clone);
+          state.selectedId = clone.id;
+          syncSelectionPanel();
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        deleteSelectedBtn.addEventListener('click', () => {
+          const selected = findSelectedElement();
+          if (!selected) return;
+          const idx = state.elements.findIndex((e) => e.id === selected.id);
+          if (idx === -1) return;
+          pushUndo();
+          state.elements.splice(idx, 1);
+          state.selectedId = null;
+          syncSelectionPanel();
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+          logMessage(`Element deleted: ${selected.label} [${selected.code}]`, 'info');
+        });
+
+        sendBackBtn.addEventListener('click', () => {
+          const selected = findSelectedElement();
+          if (!selected) return;
+          const idx = state.elements.findIndex((e) => e.id === selected.id);
+          if (idx <= 0) return;
+          pushUndo();
+          const [item] = state.elements.splice(idx, 1);
+          state.elements.unshift(item);
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        bringFrontBtn.addEventListener('click', () => {
+          const selected = findSelectedElement();
+          if (!selected) return;
+          const idx = state.elements.findIndex((e) => e.id === selected.id);
+          if (idx === -1 || idx === state.elements.length - 1) return;
+          pushUndo();
+          const [item] = state.elements.splice(idx, 1);
+          state.elements.push(item);
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        // Alignment tools for multi-select
+        alignLeftBtn.addEventListener('click', () => {
+          const selectedEls = getSelectedElements();
+          if (selectedEls.length < 2) return;
+          const minCol = Math.min(...selectedEls.map((e) => e.startCol));
+          pushUndo();
+          selectedEls.forEach((el) => {
+            const width = el.endCol - el.startCol;
+            el.startCol = minCol;
+            el.endCol = minCol + width;
+          });
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        alignRightBtn.addEventListener('click', () => {
+          const selectedEls = getSelectedElements();
+          if (selectedEls.length < 2) return;
+          const maxCol = Math.max(...selectedEls.map((e) => e.endCol));
+          pushUndo();
+          selectedEls.forEach((el) => {
+            const width = el.endCol - el.startCol;
+            el.endCol = maxCol;
+            el.startCol = maxCol - width;
+          });
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        alignCenterBtn.addEventListener('click', () => {
+          const selectedEls = getSelectedElements();
+          if (selectedEls.length < 2) return;
+          const avgCenter = selectedEls.reduce((sum, el) => sum + (el.startCol + el.endCol) / 2, 0) / selectedEls.length;
+          pushUndo();
+          selectedEls.forEach((el) => {
+            const width = el.endCol - el.startCol;
+            const center = Math.round(avgCenter);
+            el.startCol = Math.max(1, Math.min(COLS - width, center - Math.floor(width / 2)));
+            el.endCol = el.startCol + width;
+          });
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        alignTopBtn.addEventListener('click', () => {
+          const selectedEls = getSelectedElements();
+          if (selectedEls.length < 2) return;
+          const minRow = Math.min(...selectedEls.map((e) => e.startRow));
+          pushUndo();
+          selectedEls.forEach((el) => {
+            const height = el.endRow - el.startRow;
+            el.startRow = minRow;
+            el.endRow = minRow + height;
+          });
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        alignBottomBtn.addEventListener('click', () => {
+          const selectedEls = getSelectedElements();
+          if (selectedEls.length < 2) return;
+          const maxRow = Math.max(...selectedEls.map((e) => e.endRow));
+          pushUndo();
+          selectedEls.forEach((el) => {
+            const height = el.endRow - el.startRow;
+            el.endRow = maxRow;
+            el.startRow = maxRow - height;
+          });
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        alignMiddleBtn.addEventListener('click', () => {
+          const selectedEls = getSelectedElements();
+          if (selectedEls.length < 2) return;
+          const avgMiddle = selectedEls.reduce((sum, el) => sum + (el.startRow + el.endRow) / 2, 0) / selectedEls.length;
+          pushUndo();
+          selectedEls.forEach((el) => {
+            const height = el.endRow - el.startRow;
+            const middle = Math.round(avgMiddle);
+            el.startRow = Math.max(1, Math.min(ROWS - height, middle - Math.floor(height / 2)));
+            el.endRow = el.startRow + height;
+          });
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        // Help modal
+        helpBtn.addEventListener('click', () => {
+          helpModal.style.display = 'flex';
+        });
+
+        closeHelpBtn.addEventListener('click', () => {
+          helpModal.style.display = 'none';
+        });
+
+        helpModal.addEventListener('click', (event) => {
+          if (event.target === helpModal) {
+            helpModal.style.display = 'none';
+          }
+        });
+
+        // Settings modal
+        settingsGearBtn.addEventListener('click', () => {
+          if (settingsModal) settingsModal.style.display = 'flex';
+        });
+
+        if (closeSettingsBtn) {
+          closeSettingsBtn.addEventListener('click', () => {
+            if (settingsModal) settingsModal.style.display = 'none';
+          });
+        }
+
+        if (settingsModal) {
+          settingsModal.addEventListener('click', (event) => {
+            if (event.target === settingsModal) {
+              settingsModal.style.display = 'none';
+            }
+          });
+        }
+
+        if (switchToModernBtn) {
+          switchToModernBtn.addEventListener('click', () => {
+            window.location.href = '/modern';
+            logMessage('Switched to modern theme', 'info');
+          });
+        }
+
+        if (switchToRetroBtn) {
+          switchToRetroBtn.addEventListener('click', () => {
+            window.location.href = '/retro';
+            logMessage('Switched to retro theme', 'info');
+          });
+        }
+
+        if (defaultThemeSelect) {
+          defaultThemeSelect.addEventListener('change', () => {
+            state.defaultTheme = defaultThemeSelect.value;
+            try {
+              localStorage.setItem('textual-vision:theme', defaultThemeSelect.value);
+              setStatus(`Default theme set to ${defaultThemeSelect.value}`);
+              logMessage(`Default theme changed to ${defaultThemeSelect.value}`, 'info');
+            } catch (error) {
+              logMessage('Failed to save theme preference', 'error');
+            }
+          });
+        }
+
+        // Logging modal
+        if (showLogsBtn) {
+          showLogsBtn.addEventListener('click', () => {
+            if (logModal && logOutput) {
+              const logsText = state.logs.map(log =>
+                `[${log.timestamp}] [${log.level.toUpperCase()}] ${log.message}`
+              ).join('\n');
+              logOutput.value = logsText || 'No logs yet.';
+              logModal.style.display = 'flex';
+            }
+          });
+        }
+
+        if (closeLogBtn && logModal) {
+          closeLogBtn.addEventListener('click', () => {
+            logModal.style.display = 'none';
+          });
+        }
+
+        if (logModal) {
+          logModal.addEventListener('click', (event) => {
+            if (event.target === logModal) {
+              logModal.style.display = 'none';
+            }
+          });
+        }
+
+        if (clearLogsBtn) {
+          clearLogsBtn.addEventListener('click', () => {
+            state.logs = [];
+            if (logOutput) logOutput.value = 'No logs yet.';
+            setStatus('Logs cleared.');
+          });
+        }
+
+        if (exportLogsBtn) {
+          exportLogsBtn.addEventListener('click', () => {
+            const logsText = state.logs.map(log =>
+              `[${log.timestamp}] [${log.level.toUpperCase()}] ${log.message}`
+            ).join('\n');
+            const blob = new Blob([logsText], { type: 'text/plain;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `textual-vision-logs-${Date.now()}.txt`;
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(link.href), 250);
+            setStatus('Logs exported.');
+            logMessage('Logs exported to file', 'info');
+          });
+        }
+
+        // Context menu
+        function showContextMenu(x, y, element) {
+          if (!contextMenu || !contextMenuContent) return;
+
+          contextMenuContent.innerHTML = '';
+
+          const items = [
+            { label: 'Add Note', action: () => { if (elementNotesInput) elementNotesInput.focus(); } },
+            { label: 'Duplicate', action: () => duplicateSelectedBtn.click() },
+            { separator: true },
+            { label: 'Delete', action: () => deleteSelectedBtn.click() },
+            { separator: true },
+            { label: 'Bring to Front', action: () => bringFrontBtn.click() },
+            { label: 'Send to Back', action: () => sendBackBtn.click() },
+            { separator: true },
+            { label: 'Align Left', action: () => alignLeftBtn.click(), multiOnly: true },
+            { label: 'Align Center', action: () => alignCenterBtn.click(), multiOnly: true },
+            { label: 'Align Right', action: () => alignRightBtn.click(), multiOnly: true },
+            { label: 'Align Top', action: () => alignTopBtn.click(), multiOnly: true },
+            { label: 'Align Middle', action: () => alignMiddleBtn.click(), multiOnly: true },
+            { label: 'Align Bottom', action: () => alignBottomBtn.click(), multiOnly: true }
+          ];
+
+          const isMulti = isMultiSelect();
+
+          items.forEach(item => {
+            if (item.multiOnly && !isMulti) return;
+            if (item.separator) {
+              const sep = document.createElement('div');
+              sep.className = 'context-menu-separator';
+              contextMenuContent.appendChild(sep);
+            } else {
+              const menuItem = document.createElement('div');
+              menuItem.className = 'context-menu-item';
+              menuItem.textContent = item.label;
+              menuItem.addEventListener('click', () => {
+                item.action();
+                contextMenu.style.display = 'none';
+              });
+              contextMenuContent.appendChild(menuItem);
+            }
+          });
+
+          contextMenu.style.left = `${x}px`;
+          contextMenu.style.top = `${y}px`;
+          contextMenu.style.display = 'block';
+        }
+
+        function hideContextMenu() {
+          if (contextMenu) contextMenu.style.display = 'none';
+        }
+
+        if (gridEl) {
+          gridEl.addEventListener('contextmenu', (event) => {
+            const cell = event.target.closest('.cell');
+            if (!cell) return;
+            const row = Number(cell.dataset.row);
+            const col = Number(cell.dataset.col);
+            const idx = findContainingElementIndex(row, col);
+            if (idx !== -1) {
+              event.preventDefault();
+              const element = state.elements[idx];
+              if (!state.selectedId || state.selectedId !== element.id) {
+                state.selectedId = element.id;
+                state.selectedIds = [];
+                syncSelectionPanel();
+                rerender();
+              }
+              showContextMenu(event.clientX, event.clientY, element);
+            }
+          });
+        }
+
+        document.addEventListener('click', (event) => {
+          if (contextMenu && !contextMenu.contains(event.target)) {
+            hideContextMenu();
+          }
+        });
+
+        // PNG Export
+        exportPngBtn.addEventListener('click', async () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const gridWidth = (COLS + 1) * CELL_SIZE;
+            const gridHeight = (ROWS + 1) * CELL_SIZE;
+            canvas.width = gridWidth;
+            canvas.height = gridHeight;
+
+            // Background
+            ctx.fillStyle = '#40318d';
+            ctx.fillRect(0, 0, gridWidth, gridHeight);
+
+            // Grid lines and labels
+            ctx.strokeStyle = '#7869c4';
+            ctx.fillStyle = '#7869c4';
+            ctx.font = '12px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // Draw corner
+            ctx.fillStyle = '#37267d';
+            ctx.fillRect(0, 0, AXIS_SIZE, AXIS_SIZE);
+
+            // Draw column labels
+            for (let col = 0; col < COLS; col++) {
+              ctx.fillStyle = '#37267d';
+              ctx.fillRect(AXIS_SIZE + col * CELL_SIZE, 0, CELL_SIZE, AXIS_SIZE);
+              ctx.fillStyle = '#a4a0c4';
+              ctx.fillText(colLabels[col], AXIS_SIZE + col * CELL_SIZE + CELL_SIZE / 2, AXIS_SIZE / 2);
+            }
+
+            // Draw row labels
+            for (let row = 0; row < ROWS; row++) {
+              ctx.fillStyle = '#37267d';
+              ctx.fillRect(0, AXIS_SIZE + row * CELL_SIZE, AXIS_SIZE, CELL_SIZE);
+              ctx.fillStyle = '#a4a0c4';
+              ctx.fillText(String(row + 1), AXIS_SIZE / 2, AXIS_SIZE + row * CELL_SIZE + CELL_SIZE / 2);
+            }
+
+            // Draw grid
+            ctx.strokeStyle = '#7869c4';
+            for (let row = 0; row <= ROWS; row++) {
+              ctx.beginPath();
+              ctx.moveTo(AXIS_SIZE, AXIS_SIZE + row * CELL_SIZE);
+              ctx.lineTo(gridWidth, AXIS_SIZE + row * CELL_SIZE);
+              ctx.stroke();
+            }
+            for (let col = 0; col <= COLS; col++) {
+              ctx.beginPath();
+              ctx.moveTo(AXIS_SIZE + col * CELL_SIZE, AXIS_SIZE);
+              ctx.lineTo(AXIS_SIZE + col * CELL_SIZE, gridHeight);
+              ctx.stroke();
+            }
+
+            // Draw elements
+            state.elements.forEach((el) => {
+              const x = AXIS_SIZE + (el.startCol - 1) * CELL_SIZE;
+              const y = AXIS_SIZE + (el.startRow - 1) * CELL_SIZE;
+              const w = (el.endCol - el.startCol + 1) * CELL_SIZE;
+              const h = (el.endRow - el.startRow + 1) * CELL_SIZE;
+
+              ctx.fillStyle = el.color || COLOR_PALETTE[0].value;
+              ctx.fillRect(x, y, w, h);
+
+              ctx.strokeStyle = '#7869c4';
+              ctx.strokeRect(x, y, w, h);
+
+              // Draw code in each cell
+              ctx.fillStyle = '#ffffff';
+              ctx.font = '10px monospace';
+              for (let row = el.startRow; row <= el.endRow; row++) {
+                for (let col = el.startCol; col <= el.endCol; col++) {
+                  const cellX = AXIS_SIZE + (col - 1) * CELL_SIZE + CELL_SIZE / 2;
+                  const cellY = AXIS_SIZE + (row - 1) * CELL_SIZE + CELL_SIZE / 2;
+                  ctx.fillText(el.code, cellX, cellY);
+                }
+              }
+            });
+
+            // Download
+            canvas.toBlob((blob) => {
+              const link = document.createElement('a');
+              link.href = URL.createObjectURL(blob);
+              link.download = 'c64-canvas.png';
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(link.href), 250);
+              setStatus('PNG exported.');
+            });
+          } catch (error) {
+            setStatus('PNG export failed.');
+          }
+        });
+
+        viewportEl.addEventListener('wheel', onViewportWheel, { passive: false });
+        viewportEl.addEventListener('pointerdown', onViewportPointerDown);
+        viewportEl.addEventListener('pointermove', onViewportPointerMove);
+        viewportEl.addEventListener('dragover', (event) => {
+          event.preventDefault();
+          viewportEl.classList.add('dragover');
+        });
+        viewportEl.addEventListener('dragleave', () => {
+          viewportEl.classList.remove('dragover');
+        });
+        viewportEl.addEventListener('drop', (event) => {
+          event.preventDefault();
+          viewportEl.classList.remove('dragover');
+          const file = event.dataTransfer?.files?.[0] || null;
+          const text = event.dataTransfer?.getData('text/plain') || '';
+          (async () => {
+            try {
+              let yamlText = '';
+              if (file) {
+                yamlText = await file.text();
+              } else if (text.trim()) {
+                yamlText = text;
+              } else {
+                return;
+              }
+              const parsed = parseSimpleYaml(yamlText);
+              pushUndo();
+              applyLoadedState(parsed);
+              setStatus('YAML loaded.');
+            } catch (error) {
+              alert(`Unable to load YAML: ${error.message}`);
+            }
+          })();
+        });
+        window.addEventListener('pointerup', onPointerUpAnywhere);
+
+        window.addEventListener('keydown', (event) => {
+          const targetTag = event.target?.tagName || '';
+          const isEditable =
+            targetTag === 'INPUT' ||
+            targetTag === 'TEXTAREA' ||
+            event.target?.isContentEditable ||
+            event.target === labelInput ||
+            event.target === selectedLabelInput ||
+            event.target === selectedCodeInput;
+
+          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
+            event.preventDefault();
+            if (event.shiftKey) {
+              redo();
+            } else {
+              undo();
+            }
+            return;
+          }
+          if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
+            event.preventDefault();
+            redo();
+            return;
+          }
+
+          if (!isEditable) {
+            const selected = findSelectedElement();
+            const key = event.key;
+
+            if (selected && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+              event.preventDefault();
+              const step = event.shiftKey ? 5 : 1;
+              const next = {
+                startRow: selected.startRow,
+                endRow: selected.endRow,
+                startCol: selected.startCol,
+                endCol: selected.endCol
+              };
+
+              if (event.altKey) {
+                if (key === 'ArrowUp') next.endRow = Math.max(next.startRow, next.endRow - step);
+                if (key === 'ArrowDown') next.endRow = Math.min(ROWS, next.endRow + step);
+                if (key === 'ArrowLeft') next.endCol = Math.max(next.startCol, next.endCol - step);
+                if (key === 'ArrowRight') next.endCol = Math.min(COLS, next.endCol + step);
+              } else {
+                let dRow = 0;
+                let dCol = 0;
+                if (key === 'ArrowUp') dRow = -step;
+                if (key === 'ArrowDown') dRow = step;
+                if (key === 'ArrowLeft') dCol = -step;
+                if (key === 'ArrowRight') dCol = step;
+
+                const height = next.endRow - next.startRow;
+                const width = next.endCol - next.startCol;
+                next.startRow = Math.min(Math.max(1, next.startRow + dRow), ROWS - height);
+                next.endRow = next.startRow + height;
+                next.startCol = Math.min(Math.max(1, next.startCol + dCol), COLS - width);
+                next.endCol = next.startCol + width;
+              }
+
+              const changed =
+                next.startRow !== selected.startRow ||
+                next.endRow !== selected.endRow ||
+                next.startCol !== selected.startCol ||
+                next.endCol !== selected.endCol;
+              if (!changed) return;
+
+              if (!state.allowOverlap && rectOverlapsAny(next, selected.id)) {
+                setStatus(event.altKey ? 'Resize blocked by overlap.' : 'Move blocked by overlap.');
+                return;
+              }
+
+              pushUndo();
+              selected.startRow = next.startRow;
+              selected.endRow = next.endRow;
+              selected.startCol = next.startCol;
+              selected.endCol = next.endCol;
+              syncSelectionPanel();
+              markDirty({ exports: true, list: true });
+              rerender();
+              scheduleAutosave();
+              return;
+            }
+
+            if (selected && key.toLowerCase() === 'f') {
+              event.preventDefault();
+              const viewportW = viewportEl.clientWidth || 1;
+              const viewportH = viewportEl.clientHeight || 1;
+              const centerX =
+                AXIS_SIZE + (selected.startCol - 1 + (selected.endCol - selected.startCol + 1) / 2) * CELL_SIZE;
+              const centerY =
+                AXIS_SIZE + (selected.startRow - 1 + (selected.endRow - selected.startRow + 1) / 2) * CELL_SIZE;
+              pushUndo();
+              state.panX = viewportW / 2 - centerX * state.zoom;
+              state.panY = viewportH / 2 - centerY * state.zoom;
+              rerender();
+              scheduleAutosave();
+              return;
+            }
+          }
+
+          if (event.key === 'Escape') {
+            if (state.isMouseDrawing) {
+              state.isMouseDrawing = false;
+              state.drawingStart = null;
+              state.drawingEnd = null;
+            }
+            if (state.selectedId) {
+              state.selectedId = null;
+              syncSelectionPanel();
+              markDirty({ list: true });
+            }
+            rerender();
+            return;
+          }
+          if (event.key === 'Delete' || event.key === 'Backspace') {
+            const selected = findSelectedElement();
+            if (selected) {
+              event.preventDefault();
+              deleteSelectedBtn.click();
+            }
+            return;
+          }
+          if (!event.ctrlKey && !event.metaKey) {
+            if (event.key.toLowerCase() === 'd') {
+              state.mode = 'draw';
+              rerender();
+              return;
+            }
+            if (event.key.toLowerCase() === 'e') {
+              state.mode = 'erase';
+              rerender();
+              return;
+            }
+            if (event.key.toLowerCase() === 'h' || event.key === '?') {
+              event.preventDefault();
+              helpModal.style.display = 'flex';
+              return;
+            }
+          }
+          if (event.code === 'Space') {
+            state.spacePressed = true;
+            if (!state.isPanning) viewportEl.style.cursor = 'grab';
+            if (event.target === document.body) {
+              event.preventDefault();
+            }
+          }
+        });
+
+        window.addEventListener('keyup', (event) => {
+          if (event.code === 'Space') {
+            state.spacePressed = false;
+            rerender();
+          }
+        });
+
+        gridEl.addEventListener('pointerdown', (event) => {
+          const cell = event.target.closest('.cell');
+          if (!cell) return;
+          onCellPointerDown(event, Number(cell.dataset.row), Number(cell.dataset.col));
+        });
+
+        gridEl.addEventListener('pointerover', (event) => {
+          const cell = event.target.closest('.cell');
+          if (!cell) return;
+          onCellPointerEnter(Number(cell.dataset.row), Number(cell.dataset.col));
+        });
+
+        gridEl.addEventListener('pointerleave', (event) => {
+          if (!event.relatedTarget || !gridEl.contains(event.relatedTarget)) {
+            state.hoveredCell = null;
+            rerender();
+          }
+        });
+
+        async function copyText(text) {
+          const str = String(text || '');
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            return navigator.clipboard.writeText(str);
+          }
+          const temp = document.createElement('textarea');
+          temp.value = str;
+          temp.style.position = 'fixed';
+          temp.style.left = '-9999px';
+          document.body.appendChild(temp);
+          temp.focus();
+          temp.select();
+          document.execCommand('copy');
+          document.body.removeChild(temp);
+        }
+
+        copyAsciiBtn.addEventListener('click', async () => {
+          try {
+            await copyText(asciiOutput.value);
+            setStatus('ASCII copied.');
+          } catch (error) {
+            setStatus('Copy failed.');
+          }
+        });
+
+        copyJsonBtn.addEventListener('click', async () => {
+          try {
+            await copyText(jsonOutput.value);
+            setStatus('JSON copied.');
+          } catch (error) {
+            setStatus('Copy failed.');
+          }
+        });
+
+        function tryLoadAutosave() {
+          try {
+            const raw = localStorage.getItem(AUTOSAVE_KEY);
+            if (!raw) return false;
+            const payload = JSON.parse(raw);
+            applyLoadedState(payload);
+            setStatus('Restored local autosave.');
+            return true;
+          } catch (error) {
+            return false;
+          }
+        }
+
+        // Initialize theme based on URL path
+        function initializeTheme() {
+          const path = window.location.pathname;
+          if (path.includes('/modern')) {
+            document.body.classList.add('cubism');
+            logMessage('Modern theme applied', 'info');
+          } else if (path.includes('/retro') || path === '/') {
+            // C64 theme is default
+            logMessage('Retro C64 theme applied', 'info');
+          }
+
+          // Load saved theme preference
+          try {
+            const savedTheme = localStorage.getItem('textual-vision:theme');
+            if (savedTheme) {
+              state.defaultTheme = savedTheme;
+              if (defaultThemeSelect) defaultThemeSelect.value = savedTheme;
+            }
+          } catch (error) {
+            // Ignore localStorage errors
+          }
+        }
+
+        initializeTheme();
+        setupGrid();
+        setupColorPicker();
+        syncSelectionPanel();
+        tryLoadAutosave();
+        rerender();
+        logMessage('Application initialized', 'info');
+      })();
+    </script>
+  </body>
+</html>
