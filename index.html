@@ -106,6 +106,10 @@
         min-height: 70vh;
       }
 
+      .viewport.dragover {
+        box-shadow: inset 0 0 0 3px #ffffff, inset 0 0 0 6px var(--c64-heading);
+      }
+
       .canvas-root {
         position: absolute;
         left: 0;
@@ -176,7 +180,10 @@
             <h1 class="text-lg">Visual-To-Text Ideation Canvas · C64 Mode</h1>
             <p class="text-xs mt-1">Draw rectangular layout blocks, pan/zoom the viewport, and export ASCII + JSON + YAML.</p>
           </div>
-          <div class="text-xs status-line heading sm:text-right" id="statusLine"></div>
+          <div class="text-xs status-line heading sm:text-right">
+            <div id="statusLine"></div>
+            <div id="infoLine" class="opacity-80"></div>
+          </div>
         </div>
       </header>
 
@@ -246,7 +253,7 @@
           <div class="panel p-2 text-xs leading-relaxed">
             <p>Pan: middle mouse drag OR hold Space + left drag</p>
             <p>Zoom: mouse wheel in viewport</p>
-            <p>Select: click a block (hold Shift to start a draw on occupied cells)</p>
+            <p>Select: click a block (Alt+click cycles overlaps; Shift starts draw on occupied cells)</p>
             <p>Shortcuts: D · E · F (focus) · Esc · Del · Ctrl/Cmd+Z · Ctrl+Y</p>
             <p>Nudge: Arrow keys (Shift = 5) · Resize: Alt+Arrow (Shift = 5)</p>
           </div>
@@ -333,6 +340,7 @@
         const viewportEl = document.getElementById('viewport');
         const canvasRootEl = document.getElementById('canvasRoot');
         const statusLineEl = document.getElementById('statusLine');
+        const infoLineEl = document.getElementById('infoLine');
         const drawBtn = document.getElementById('drawToolBtn');
         const eraseBtn = document.getElementById('eraseToolBtn');
         const clearBtn = document.getElementById('clearCanvasBtn');
@@ -426,6 +434,27 @@
               state.autosaveTimer = null;
             }
           }, 250);
+        }
+
+        function updateInfoLine() {
+          if (!infoLineEl) return;
+          const parts = [];
+          parts.push(state.mode === 'erase' ? 'ERASE' : 'DRAW');
+          parts.push(`Z:${state.zoom.toFixed(2)}`);
+          parts.push(`P:${Math.round(state.panX)},${Math.round(state.panY)}`);
+
+          if (state.hoveredCell) {
+            parts.push(`H:${state.hoveredCell.row},${state.hoveredCell.col}`);
+          }
+
+          const selected = findSelectedElement();
+          if (selected) {
+            const w = selected.endCol - selected.startCol + 1;
+            const h = selected.endRow - selected.startRow + 1;
+            parts.push(`S:[${selected.code}] ${selected.label} (${w}x${h})`);
+          }
+
+          infoLineEl.textContent = parts.join(' · ');
         }
 
         function normalizeRect(a, b) {
@@ -713,6 +742,7 @@
             renderElementsList();
             state.dirty.list = false;
           }
+          updateInfoLine();
         }
 
         function setupGrid() {
@@ -763,6 +793,22 @@
           return -1;
         }
 
+        function findContainingElementHitIndices(row, col) {
+          const hits = [];
+          for (let i = state.elements.length - 1; i >= 0; i -= 1) {
+            const element = state.elements[i];
+            if (
+              row >= element.startRow &&
+              row <= element.endRow &&
+              col >= element.startCol &&
+              col <= element.endCol
+            ) {
+              hits.push(i);
+            }
+          }
+          return hits;
+        }
+
         function rectOverlapsAny(rect, ignoreId = null) {
           for (let i = 0; i < state.elements.length; i += 1) {
             const e = state.elements[i];
@@ -800,9 +846,14 @@
           }
 
           if (!event.shiftKey) {
-            const idx = findContainingElementIndex(row, col);
-            if (idx !== -1) {
-              state.selectedId = state.elements[idx].id;
+            const hits = findContainingElementHitIndices(row, col);
+            if (hits.length) {
+              let nextIndex = hits[0];
+              if (event.altKey && state.selectedId) {
+                const selectedHit = hits.findIndex((i) => state.elements[i]?.id === state.selectedId);
+                if (selectedHit !== -1) nextIndex = hits[(selectedHit + 1) % hits.length];
+              }
+              state.selectedId = state.elements[nextIndex].id;
               syncSelectionPanel();
               markDirty({ list: true });
               rerender();
@@ -1371,6 +1422,37 @@
         viewportEl.addEventListener('wheel', onViewportWheel, { passive: false });
         viewportEl.addEventListener('pointerdown', onViewportPointerDown);
         viewportEl.addEventListener('pointermove', onViewportPointerMove);
+        viewportEl.addEventListener('dragover', (event) => {
+          event.preventDefault();
+          viewportEl.classList.add('dragover');
+        });
+        viewportEl.addEventListener('dragleave', () => {
+          viewportEl.classList.remove('dragover');
+        });
+        viewportEl.addEventListener('drop', (event) => {
+          event.preventDefault();
+          viewportEl.classList.remove('dragover');
+          const file = event.dataTransfer?.files?.[0] || null;
+          const text = event.dataTransfer?.getData('text/plain') || '';
+          (async () => {
+            try {
+              let yamlText = '';
+              if (file) {
+                yamlText = await file.text();
+              } else if (text.trim()) {
+                yamlText = text;
+              } else {
+                return;
+              }
+              const parsed = parseSimpleYaml(yamlText);
+              pushUndo();
+              applyLoadedState(parsed);
+              setStatus('YAML loaded.');
+            } catch (error) {
+              alert(`Unable to load YAML: ${error.message}`);
+            }
+          })();
+        });
         window.addEventListener('pointerup', onPointerUpAnywhere);
 
         window.addEventListener('keydown', (event) => {

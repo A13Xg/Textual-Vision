@@ -20,6 +20,7 @@ Open `/index.html` in a browser (or serve the repo locally with something like `
 - Click an existing block to **select** it and edit its label/code, duplicate it, or delete it.
 - Toggle **Allow Overlap** to permit stacked blocks (otherwise overlaps are blocked).
 - When overlaps are enabled, use **Bring Front** / **Send Back** to control stacking order.
+- Tip: `Alt` + click cycles through stacked elements under the cursor.
 
 **Navigation**
 - Pan: middle mouse drag, or hold `Space` + left-drag
@@ -49,6 +50,7 @@ Open `/index.html` in a browser (or serve the repo locally with something like `
 - Use **Copy** buttons to copy ASCII/JSON to the clipboard.
 - Use **Save As YAML** to download a full snapshot (including viewport transform), and **Open File** to restore.
 - Use **Paste YAML** to load a snapshot directly from a YAML string.
+- You can also drag-and-drop a `.yaml`/`.yml` file (or YAML text) onto the viewport to load it.
 - Use **Copy YAML** to copy the full YAML snapshot to the clipboard.
 
 ## Notes
