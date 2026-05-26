@@ -20,6 +20,7 @@ Open `/index.html` in a browser (or serve the repo locally with something like `
 
 ### Core Workflow
 - Pick an **object type**, enter a **non-empty title**, pick a color, then **Draw** rectangles on the grid to create layout blocks.
+- The title field is validated when drawing; empty titles are blocked with an inline error state.
 - Click an existing block to **select** it and edit its title/code/color, duplicate it, delete it, or attach notes.
 - Use **Ctrl/Cmd + Click** to select multiple elements for batch operations.
 - Toggle **Allow Overlap** to permit stacked blocks (otherwise overlaps are blocked).
@@ -29,6 +30,7 @@ Open `/index.html` in a browser (or serve the repo locally with something like `
 ### Mouse Tools
 - Use **Drag Element** and **Resize Element** tools for mouse-driven adjustments (with a ghost outline preview).
 - Tip: `Esc` closes open modals/context menus, or cancels the current interaction.
+- Most interactive controls include hover tooltips describing shortcuts and expected behavior.
 
 ### Visual Customization
 - **Color Picker**: Choose from 9 predefined colors to visually distinguish different layout blocks.
@@ -45,6 +47,14 @@ Open `/index.html` in a browser (or serve the repo locally with something like `
   - **Align ↓**: Align bottom edges
   - **⊟ Middle**: Center vertically
 - Perfect for quickly organizing and aligning multiple blocks.
+- Use **Merge to Same Object** to combine multiple selected blocks into one bounding-box element.
+
+### Context Menu & Notes
+- Right-click on a selected element to open a context menu with:
+  - Add Note, Duplicate, Delete
+  - Bring to Front, Send to Back
+  - Alignment actions (for multi-select)
+- Notes are saved with each element and persisted in YAML/local autosave state.
 
 ### Navigation
 - Pan: middle mouse drag, or hold `Space` + left-drag
@@ -89,6 +99,11 @@ Open `/index.html` in a browser (or serve the repo locally with something like `
 ### Themes & Settings
 - Use the **Settings** gear to switch between Retro and Modern themes.
 - Theme preference is saved in `localStorage` and is honored when loading the app root.
+- Routing supports `/retro/` and `/modern/`, while `/` defaults to Retro unless a saved Modern preference exists.
+
+### Logging
+- Open **Settings → Show Logs** to view timestamped application logs (info/warn/error).
+- Use **Clear Logs** to reset the in-memory log stream and **Export Logs** to download a `.log` file.
 
 ## Notes
 

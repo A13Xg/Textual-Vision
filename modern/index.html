@@ -1160,7 +1160,7 @@
           if (!has) {
             selectedLabelInput.value = '';
             selectedCodeInput.value = '';
-            selectedColorInput.value = '';
+            selectedColorInput.value = rgbToHex(COLOR_PALETTE[0].value);
             selectedBoundsEl.textContent = '--';
             elementNotesInput.value = '';
             return;
@@ -1169,7 +1169,7 @@
           if (multi) {
             selectedLabelInput.value = '';
             selectedCodeInput.value = '';
-            selectedColorInput.value = '';
+            selectedColorInput.value = rgbToHex(COLOR_PALETTE[0].value);
             selectedBoundsEl.textContent = `${selectedEls.length} selected`;
             elementNotesInput.value = '';
           } else if (selected) {
