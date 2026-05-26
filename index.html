@@ -238,6 +238,8 @@
             <div class="grid grid-cols-2 gap-2">
               <button id="duplicateSelectedBtn" class="c64-button" type="button" disabled>Duplicate</button>
               <button id="deleteSelectedBtn" class="c64-button" type="button" disabled>Delete</button>
+              <button id="sendBackBtn" class="c64-button" type="button" disabled>Send Back</button>
+              <button id="bringFrontBtn" class="c64-button" type="button" disabled>Bring Front</button>
             </div>
           </div>
 
@@ -245,7 +247,8 @@
             <p>Pan: middle mouse drag OR hold Space + left drag</p>
             <p>Zoom: mouse wheel in viewport</p>
             <p>Select: click a block (hold Shift to start a draw on occupied cells)</p>
-            <p>Shortcuts: D · E · Esc (cancel/deselect) · Del · Ctrl/Cmd+Z · Ctrl+Y</p>
+            <p>Shortcuts: D · E · F (focus) · Esc · Del · Ctrl/Cmd+Z · Ctrl+Y</p>
+            <p>Nudge: Arrow keys (Shift = 5) · Resize: Alt+Arrow (Shift = 5)</p>
           </div>
         </aside>
 
@@ -265,6 +268,16 @@
             <label class="c64-button text-center" for="openYamlInput">Open File</label>
           </div>
           <input id="openYamlInput" class="hidden" type="file" accept=".yaml,.yml" />
+
+          <div class="panel p-2 text-xs space-y-2">
+            <div class="flex items-center justify-between gap-3">
+              <label class="flex items-center gap-2">
+                <input id="exportFencesToggle" class="c64-check" type="checkbox" checked />
+                <span>Wrap Exports</span>
+              </label>
+              <button id="pasteYamlBtn" class="c64-button" type="button">Paste YAML</button>
+            </div>
+          </div>
 
           <div class="panel p-2 text-xs space-y-2">
             <div class="flex items-center justify-between gap-3">
@@ -336,9 +349,13 @@
         const selectedBoundsEl = document.getElementById('selectedBounds');
         const duplicateSelectedBtn = document.getElementById('duplicateSelectedBtn');
         const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+        const sendBackBtn = document.getElementById('sendBackBtn');
+        const bringFrontBtn = document.getElementById('bringFrontBtn');
         const saveYamlBtn = document.getElementById('saveYamlBtn');
         const copyYamlBtn = document.getElementById('copyYamlBtn');
         const openYamlInput = document.getElementById('openYamlInput');
+        const exportFencesToggle = document.getElementById('exportFencesToggle');
+        const pasteYamlBtn = document.getElementById('pasteYamlBtn');
         const elementsCountEl = document.getElementById('elementsCount');
         const elementsListEl = document.getElementById('elementsList');
         const copyAsciiBtn = document.getElementById('copyAsciiBtn');
@@ -355,6 +372,7 @@
           selectedId: null,
           allowOverlap: false,
           autosaveEnabled: true,
+          wrapExports: true,
           dirty: {
             exports: true,
             list: true
@@ -500,25 +518,23 @@
               .join('');
             return `${rowLabel}  ${rowText}`;
           });
-          return ['```text', colHeader, ...lines, '```'].join('\n');
+          const body = [colHeader, ...lines].join('\n');
+          return state.wrapExports ? ['```text', body, '```'].join('\n') : body;
         }
 
         function formatJson(matrix) {
-          return [
-            '```json',
-            JSON.stringify(
-              {
-                rows: ROWS,
-                cols: COLS,
-                columns: colLabels,
-                matrix,
-                elements: state.elements
-              },
-              null,
-              2
-            ),
-            '```'
-          ].join('\n');
+          const json = JSON.stringify(
+            {
+              rows: ROWS,
+              cols: COLS,
+              columns: colLabels,
+              matrix,
+              elements: state.elements
+            },
+            null,
+            2
+          );
+          return state.wrapExports ? ['```json', json, '```'].join('\n') : json;
         }
 
         function updateExports(matrix) {
@@ -538,6 +554,8 @@
           selectedCodeInput.disabled = !has;
           duplicateSelectedBtn.disabled = !has;
           deleteSelectedBtn.disabled = !has;
+          sendBackBtn.disabled = !has;
+          bringFrontBtn.disabled = !has;
           if (!has) {
             selectedLabelInput.value = '';
             selectedCodeInput.value = '';
@@ -564,6 +582,7 @@
             zoom: state.zoom,
             selectedId: state.selectedId,
             allowOverlap: state.allowOverlap,
+            wrapExports: state.wrapExports,
             activeLabel: labelInput.value
           };
         }
@@ -578,6 +597,8 @@
           if (state.selectedId && !state.elements.some((e) => e.id === state.selectedId)) state.selectedId = null;
           state.allowOverlap = Boolean(snap.allowOverlap);
           allowOverlapToggle.checked = state.allowOverlap;
+          state.wrapExports = snap.wrapExports !== false;
+          exportFencesToggle.checked = state.wrapExports;
           if (typeof snap.activeLabel === 'string') labelInput.value = snap.activeLabel;
           syncSelectionPanel();
           markDirty({ exports: true, list: true });
@@ -1036,7 +1057,8 @@
             ui: {
               mode: state.mode,
               activeLabel: sanitizeLabel(labelInput.value),
-              allowOverlap: state.allowOverlap
+              allowOverlap: state.allowOverlap,
+              wrapExports: state.wrapExports
             },
             elements: state.elements
           };
@@ -1091,6 +1113,8 @@
           state.mode = payload.ui?.mode === 'erase' ? 'erase' : 'draw';
           state.allowOverlap = Boolean(payload.ui?.allowOverlap);
           allowOverlapToggle.checked = state.allowOverlap;
+          state.wrapExports = payload.ui?.wrapExports !== false;
+          exportFencesToggle.checked = state.wrapExports;
 
           if (typeof payload.ui?.activeLabel === 'string') {
             labelInput.value = payload.ui.activeLabel;
@@ -1124,7 +1148,9 @@
           try {
             const text = await file.text();
             const parsed = parseSimpleYaml(text);
+            pushUndo();
             applyLoadedState(parsed);
+            setStatus('YAML loaded.');
           } catch (error) {
             alert(`Unable to load YAML: ${error.message}`);
           } finally {
@@ -1144,6 +1170,7 @@
 
         clearBtn.addEventListener('click', () => {
           if (state.elements.length === 0) return;
+          if (!confirm('Clear the canvas? This can be undone.')) return;
           pushUndo();
           state.elements = [];
           state.isMouseDrawing = false;
@@ -1163,6 +1190,26 @@
           scheduleAutosave();
         });
 
+        exportFencesToggle.addEventListener('change', () => {
+          state.wrapExports = exportFencesToggle.checked;
+          markDirty({ exports: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        pasteYamlBtn.addEventListener('click', () => {
+          const text = prompt('Paste YAML exported from this app:', '');
+          if (!text) return;
+          try {
+            const parsed = parseSimpleYaml(text);
+            pushUndo();
+            applyLoadedState(parsed);
+            setStatus('YAML loaded.');
+          } catch (error) {
+            alert(`Unable to load YAML: ${error.message}`);
+          }
+        });
+
         autosaveToggle.addEventListener('change', () => {
           state.autosaveEnabled = autosaveToggle.checked;
           if (state.autosaveEnabled) {
@@ -1175,6 +1222,12 @@
 
         clearAutosaveBtn.addEventListener('click', () => {
           try {
+            const exists = Boolean(localStorage.getItem(AUTOSAVE_KEY));
+            if (!exists) {
+              setStatus('No local save found.');
+              return;
+            }
+            if (!confirm('Clear local autosave?')) return;
             localStorage.removeItem(AUTOSAVE_KEY);
             setStatus('Local save cleared.');
           } catch (error) {
@@ -1289,12 +1342,47 @@
           scheduleAutosave();
         });
 
+        sendBackBtn.addEventListener('click', () => {
+          const selected = findSelectedElement();
+          if (!selected) return;
+          const idx = state.elements.findIndex((e) => e.id === selected.id);
+          if (idx <= 0) return;
+          pushUndo();
+          const [item] = state.elements.splice(idx, 1);
+          state.elements.unshift(item);
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
+        bringFrontBtn.addEventListener('click', () => {
+          const selected = findSelectedElement();
+          if (!selected) return;
+          const idx = state.elements.findIndex((e) => e.id === selected.id);
+          if (idx === -1 || idx === state.elements.length - 1) return;
+          pushUndo();
+          const [item] = state.elements.splice(idx, 1);
+          state.elements.push(item);
+          markDirty({ exports: true, list: true });
+          rerender();
+          scheduleAutosave();
+        });
+
         viewportEl.addEventListener('wheel', onViewportWheel, { passive: false });
         viewportEl.addEventListener('pointerdown', onViewportPointerDown);
         viewportEl.addEventListener('pointermove', onViewportPointerMove);
         window.addEventListener('pointerup', onPointerUpAnywhere);
 
         window.addEventListener('keydown', (event) => {
+          const targetTag = event.target?.tagName || '';
+          const isEditable =
+            targetTag === 'INPUT' ||
+            targetTag === 'TEXTAREA' ||
+            event.target?.isContentEditable ||
+            event.target === labelInput ||
+            event.target === selectedLabelInput ||
+            event.target === selectedCodeInput;
+
           if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
             event.preventDefault();
             if (event.shiftKey) {
@@ -1309,6 +1397,83 @@
             redo();
             return;
           }
+
+          if (!isEditable) {
+            const selected = findSelectedElement();
+            const key = event.key;
+
+            if (selected && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
+              event.preventDefault();
+              const step = event.shiftKey ? 5 : 1;
+              const next = {
+                startRow: selected.startRow,
+                endRow: selected.endRow,
+                startCol: selected.startCol,
+                endCol: selected.endCol
+              };
+
+              if (event.altKey) {
+                if (key === 'ArrowUp') next.endRow = Math.max(next.startRow, next.endRow - step);
+                if (key === 'ArrowDown') next.endRow = Math.min(ROWS, next.endRow + step);
+                if (key === 'ArrowLeft') next.endCol = Math.max(next.startCol, next.endCol - step);
+                if (key === 'ArrowRight') next.endCol = Math.min(COLS, next.endCol + step);
+              } else {
+                let dRow = 0;
+                let dCol = 0;
+                if (key === 'ArrowUp') dRow = -step;
+                if (key === 'ArrowDown') dRow = step;
+                if (key === 'ArrowLeft') dCol = -step;
+                if (key === 'ArrowRight') dCol = step;
+
+                const height = next.endRow - next.startRow;
+                const width = next.endCol - next.startCol;
+                next.startRow = Math.min(Math.max(1, next.startRow + dRow), ROWS - height);
+                next.endRow = next.startRow + height;
+                next.startCol = Math.min(Math.max(1, next.startCol + dCol), COLS - width);
+                next.endCol = next.startCol + width;
+              }
+
+              const changed =
+                next.startRow !== selected.startRow ||
+                next.endRow !== selected.endRow ||
+                next.startCol !== selected.startCol ||
+                next.endCol !== selected.endCol;
+              if (!changed) return;
+
+              if (!state.allowOverlap && rectOverlapsAny(next, selected.id)) {
+                setStatus(event.altKey ? 'Resize blocked by overlap.' : 'Move blocked by overlap.');
+                return;
+              }
+
+              pushUndo();
+              selected.startRow = next.startRow;
+              selected.endRow = next.endRow;
+              selected.startCol = next.startCol;
+              selected.endCol = next.endCol;
+              syncSelectionPanel();
+              markDirty({ exports: true, list: true });
+              rerender();
+              scheduleAutosave();
+              return;
+            }
+
+            if (selected && key.toLowerCase() === 'f') {
+              event.preventDefault();
+              const viewportW = viewportEl.clientWidth || 1;
+              const viewportH = viewportEl.clientHeight || 1;
+              const centerX =
+                AXIS_SIZE + (selected.startCol - 1 + (selected.endCol - selected.startCol + 1) / 2) * CELL_SIZE;
+              const centerY =
+                AXIS_SIZE + (selected.startRow - 1 + (selected.endRow - selected.startRow + 1) / 2) * CELL_SIZE;
+              pushUndo();
+              state.panX = viewportW / 2 - centerX * state.zoom;
+              state.panY = viewportH / 2 - centerY * state.zoom;
+              rerender();
+              scheduleAutosave();
+              return;
+            }
+          }
+
           if (event.key === 'Escape') {
             if (state.isMouseDrawing) {
               state.isMouseDrawing = false;
