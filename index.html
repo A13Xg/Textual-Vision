@@ -205,7 +205,18 @@
       (() => {
         const COLS = 16;
         const ROWS = 16;
-        const colLabels = Array.from({ length: COLS }, (_, i) => String.fromCharCode(65 + i));
+        function getColumnLabel(index) {
+          let n = index + 1;
+          let label = '';
+          while (n > 0) {
+            const rem = (n - 1) % 26;
+            label = String.fromCharCode(65 + rem) + label;
+            n = Math.floor((n - 1) / 26);
+          }
+          return label;
+        }
+
+        const colLabels = Array.from({ length: COLS }, (_, i) => getColumnLabel(i));
 
         const gridEl = document.getElementById('grid');
         const viewportEl = document.getElementById('viewport');
@@ -257,6 +268,13 @@
           if (letters.length >= 2) return letters.slice(0, 2);
           if (letters.length === 1) return `${letters}X`;
           return 'BL';
+        }
+
+        function makeId() {
+          if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            return window.crypto.randomUUID();
+          }
+          return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
         }
 
         function codeExists(code) {
@@ -448,7 +466,7 @@
           if (state.isMouseDrawing && state.drawingStart && state.drawingEnd) {
             const rect = normalizeRect(state.drawingStart, state.drawingEnd);
             state.elements.push({
-              id: crypto.randomUUID(),
+              id: makeId(),
               label: sanitizeLabel(labelInput.value),
               code: generateUniqueCode(labelInput.value),
               ...rect
@@ -555,7 +573,7 @@
           if (trimmed === 'null') return null;
           if (trimmed === 'true') return true;
           if (trimmed === 'false') return false;
-          if (/^-?\\d+(\\.\\d+)?$/.test(trimmed)) return Number(trimmed);
+          if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
           if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
             return trimmed.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\');
           }
@@ -685,7 +703,7 @@
           const elements = Array.isArray(payload.elements) ? payload.elements : [];
           state.elements = elements
             .map((item) => ({
-              id: item.id || crypto.randomUUID(),
+              id: item.id || makeId(),
               label: sanitizeLabel(item.label),
               code: String(item.code || '').toUpperCase().slice(0, 2),
               startRow: Number(item.startRow),
