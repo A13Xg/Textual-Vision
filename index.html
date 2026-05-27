@@ -156,11 +156,16 @@
 
       .cell.preview {
         background: rgba(120, 105, 196, 0.45);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
       }
 
       .cell.preview.overlap {
         background: rgba(255, 99, 71, 0.45);
         box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7);
+      }
+
+      .cell.selection-rect {
+        box-shadow: inset 0 0 0 2px #00ffff, inset 0 0 0 4px rgba(0, 255, 255, 0.3);
       }
 
       .cell.selected {
@@ -297,6 +302,58 @@
         75% { transform: translateX(5px); }
       }
 
+      /* Clear Tool Button */
+      .clear-tool-btn {
+        position: absolute;
+        top: 0.25rem;
+        right: 0.25rem;
+        width: 24px;
+        height: 24px;
+        background: #ff4444;
+        color: #ffffff;
+        border: 1px solid #cc0000;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        z-index: 10;
+        transition: all 0.2s ease;
+      }
+
+      .clear-tool-btn:hover {
+        background: #ff6666;
+        transform: scale(1.1);
+      }
+
+      /* Edit/Save Toggle Button */
+      .edit-toggle-btn {
+        background: var(--c64-border);
+        color: var(--c64-bg);
+        border: 2px solid var(--c64-heading);
+        padding: 0.3rem 0.6rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-weight: bold;
+      }
+
+      .edit-toggle-btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .edit-toggle-btn.active {
+        background: #00ff00;
+        color: #000000;
+        border-color: #00cc00;
+      }
+
+      .textarea-readonly {
+        opacity: 0.7;
+        background: rgba(58, 42, 122, 0.5) !important;
+      }
+
       /* Modern Cubism Theme Styles */
       .cubism {
         background: #1a2e50;
@@ -418,15 +475,17 @@
 
           <button id="applyGridSizeBtn" class="c64-button w-full" type="button">Apply Grid Size</button>
 
-          <div class="panel p-2 text-xs space-y-2">
+          <div class="panel p-2 text-xs space-y-2 relative">
             <h3 class="text-xs">Mouse Tools</h3>
             <button id="dragToolBtn" class="c64-button w-full" type="button">Drag Element</button>
             <button id="resizeToolBtn" class="c64-button w-full" type="button">Resize Element</button>
+            <button id="clearMouseToolBtn" class="clear-tool-btn" type="button" title="Clear tool selection (Esc)">×</button>
           </div>
 
-          <div class="grid grid-cols-2 gap-2">
+          <div class="grid grid-cols-2 gap-2 relative">
             <button id="drawToolBtn" class="c64-button active" type="button">Draw</button>
             <button id="eraseToolBtn" class="c64-button" type="button">Erase</button>
+            <button id="clearDrawToolBtn" class="clear-tool-btn" type="button" style="top: 0.5rem; right: 0.5rem;" title="Clear tool selection (Esc)">×</button>
           </div>
 
           <button id="clearCanvasBtn" class="c64-button w-full" type="button">Clear Canvas</button>
@@ -546,17 +605,25 @@
           <div class="space-y-1">
             <div class="flex items-center justify-between gap-2">
               <h3 class="text-xs">ASCII Art Grid Map</h3>
-              <button id="copyAsciiBtn" class="c64-button" type="button">Copy</button>
+              <div class="flex gap-2">
+                <button id="editAsciiBtn" class="edit-toggle-btn" type="button" title="Toggle edit mode">✎</button>
+                <button id="copyAsciiBtn" class="c64-button" type="button">Copy</button>
+              </div>
             </div>
-            <textarea id="asciiOutput" class="c64-textarea" readonly></textarea>
+            <textarea id="asciiOutput" class="c64-textarea textarea-readonly" readonly></textarea>
+            <div id="asciiErrorMsg" class="text-red-400 text-xs" style="display: none;"></div>
           </div>
 
           <div class="space-y-1">
             <div class="flex items-center justify-between gap-2">
               <h3 class="text-xs">Structured JSON Matrix</h3>
-              <button id="copyJsonBtn" class="c64-button" type="button">Copy</button>
+              <div class="flex gap-2">
+                <button id="editJsonBtn" class="edit-toggle-btn" type="button" title="Toggle edit mode">✎</button>
+                <button id="copyJsonBtn" class="c64-button" type="button">Copy</button>
+              </div>
             </div>
-            <textarea id="jsonOutput" class="c64-textarea" readonly></textarea>
+            <textarea id="jsonOutput" class="c64-textarea textarea-readonly" readonly></textarea>
+            <div id="jsonErrorMsg" class="text-red-400 text-xs" style="display: none;"></div>
           </div>
 
           <button id="copyYamlBtn" class="c64-button w-full" type="button">Copy YAML</button>
@@ -767,6 +834,12 @@
 	        const logOutput = document.getElementById('logOutput');
 	        const contextMenu = document.getElementById('contextMenu');
 	        const contextMenuContent = document.getElementById('contextMenuContent');
+	        const clearMouseToolBtn = document.getElementById('clearMouseToolBtn');
+	        const clearDrawToolBtn = document.getElementById('clearDrawToolBtn');
+	        const editAsciiBtn = document.getElementById('editAsciiBtn');
+	        const editJsonBtn = document.getElementById('editJsonBtn');
+	        const asciiErrorMsg = document.getElementById('asciiErrorMsg');
+	        const jsonErrorMsg = document.getElementById('jsonErrorMsg');
 
 	        function setTitle(el, text) {
 	          if (!el) return;
@@ -828,6 +901,8 @@
           allowOverlap: false,
           autosaveEnabled: true,
           wrapExports: true,
+          asciiEditMode: false,
+          jsonEditMode: false,
           dirty: {
             exports: true,
             list: true
@@ -1274,74 +1349,80 @@
         }
 
         function rerender() {
-          const { matrix: occupancy, owner } = buildOccupancy();
-          const previews = previewSet();
-          const overlapPreview = new Set();
-          if (previews.size && !state.allowOverlap) {
-            previews.forEach((key) => {
-              const [r, c] = key.split('-').map((n) => Number(n));
-              if (occupancy[r - 1]?.[c - 1] && occupancy[r - 1][c - 1] !== '.') {
-                overlapPreview.add(key);
+          try {
+            const { matrix: occupancy, owner } = buildOccupancy();
+            const previews = previewSet();
+            const overlapPreview = new Set();
+            if (previews.size && !state.allowOverlap) {
+              previews.forEach((key) => {
+                const [r, c] = key.split('-').map((n) => Number(n));
+                if (occupancy[r - 1]?.[c - 1] && occupancy[r - 1][c - 1] !== '.') {
+                  overlapPreview.add(key);
+                }
+              });
+            }
+            const hovered = state.hoveredCell ? `${state.hoveredCell.row}-${state.hoveredCell.col}` : null;
+
+            const cells = gridEl.querySelectorAll('.cell');
+            cells.forEach((cellEl) => {
+              const row = Number(cellEl.dataset.row);
+              const col = Number(cellEl.dataset.col);
+              const key = `${row}-${col}`;
+              const code = occupancy[row - 1][col - 1];
+              const ownerId = owner[row - 1][col - 1];
+              const ownerEl = ownerId ? state.elements.find((e) => e.id === ownerId) : null;
+
+              cellEl.textContent = code === '.' ? '' : code;
+              cellEl.classList.toggle('occupied', code !== '.');
+              cellEl.classList.toggle('hover-highlight', state.mode === 'draw' && hovered === key);
+              cellEl.classList.toggle('preview', previews.has(key));
+              cellEl.classList.toggle('overlap', overlapPreview.has(key));
+              cellEl.classList.toggle('selection-rect', previews.has(key) && state.isMouseDrawing);
+              cellEl.classList.toggle('selected', ownerId === state.selectedId || state.selectedIds.includes(ownerId));
+
+              // Apply element color
+              if (ownerEl && ownerEl.color) {
+                cellEl.style.background = code !== '.' ? ownerEl.color : 'transparent';
+              } else if (code !== '.') {
+                cellEl.style.background = 'rgba(164, 160, 196, 0.25)';
+              } else {
+                cellEl.style.background = 'transparent';
               }
             });
-          }
-          const hovered = state.hoveredCell ? `${state.hoveredCell.row}-${state.hoveredCell.col}` : null;
 
-          const cells = gridEl.querySelectorAll('.cell');
-          cells.forEach((cellEl) => {
-            const row = Number(cellEl.dataset.row);
-            const col = Number(cellEl.dataset.col);
-            const key = `${row}-${col}`;
-            const code = occupancy[row - 1][col - 1];
-            const ownerId = owner[row - 1][col - 1];
-            const ownerEl = ownerId ? state.elements.find((e) => e.id === ownerId) : null;
+            canvasRootEl.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
+            drawBtn.classList.toggle('active', state.mode === 'draw');
+            eraseBtn.classList.toggle('active', state.mode === 'erase');
+            dragToolBtn.classList.toggle('active', state.mode === 'drag');
+            resizeToolBtn.classList.toggle('active', state.mode === 'resize');
 
-            cellEl.textContent = code === '.' ? '' : code;
-            cellEl.classList.toggle('occupied', code !== '.');
-            cellEl.classList.toggle('hover-highlight', state.mode === 'draw' && hovered === key);
-            cellEl.classList.toggle('preview', previews.has(key));
-            cellEl.classList.toggle('overlap', overlapPreview.has(key));
-            cellEl.classList.toggle('selected', ownerId === state.selectedId || state.selectedIds.includes(ownerId));
-
-            // Apply element color
-            if (ownerEl && ownerEl.color) {
-              cellEl.style.background = code !== '.' ? ownerEl.color : 'transparent';
-            } else if (code !== '.') {
-              cellEl.style.background = 'rgba(164, 160, 196, 0.25)';
-            } else {
-              cellEl.style.background = 'transparent';
+            let cursor = 'crosshair';
+            if (state.isPanning) {
+              cursor = 'grabbing';
+            } else if (state.mode === 'erase') {
+              cursor = 'not-allowed';
+            } else if (state.mode === 'drag') {
+              cursor = state.isDragging ? 'grabbing' : 'grab';
+            } else if (state.mode === 'resize') {
+              cursor = 'nwse-resize';
             }
-          });
+            viewportEl.style.cursor = cursor;
 
-          canvasRootEl.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
-          drawBtn.classList.toggle('active', state.mode === 'draw');
-          eraseBtn.classList.toggle('active', state.mode === 'erase');
-          dragToolBtn.classList.toggle('active', state.mode === 'drag');
-          resizeToolBtn.classList.toggle('active', state.mode === 'resize');
-
-          let cursor = 'crosshair';
-          if (state.isPanning) {
-            cursor = 'grabbing';
-          } else if (state.mode === 'erase') {
-            cursor = 'not-allowed';
-          } else if (state.mode === 'drag') {
-            cursor = state.isDragging ? 'grabbing' : 'grab';
-          } else if (state.mode === 'resize') {
-            cursor = 'nwse-resize';
+            undoBtn.disabled = state.history.undo.length === 0;
+            redoBtn.disabled = state.history.redo.length === 0;
+            if (state.dirty.exports) {
+              updateExports(occupancy);
+              state.dirty.exports = false;
+            }
+            if (state.dirty.list) {
+              renderElementsList();
+              state.dirty.list = false;
+            }
+            updateInfoLine();
+          } catch (error) {
+            logMessage(`Error in rerender: ${error.message}`, 'error');
+            console.error('Rerender error:', error);
           }
-          viewportEl.style.cursor = cursor;
-
-          undoBtn.disabled = state.history.undo.length === 0;
-          redoBtn.disabled = state.history.redo.length === 0;
-          if (state.dirty.exports) {
-            updateExports(occupancy);
-            state.dirty.exports = false;
-          }
-          if (state.dirty.list) {
-            renderElementsList();
-            state.dirty.list = false;
-          }
-          updateInfoLine();
         }
 
         function setupGrid() {
