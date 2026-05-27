@@ -511,6 +511,7 @@
               <button id="resetViewBtn" class="c64-button flex-1" type="button">Reset View</button>
               <button id="fitViewBtn" class="c64-button flex-1" type="button">Fit</button>
             </div>
+            <button id="fitAllBtn" class="c64-button w-full" type="button">Fit All Elements</button>
           </div>
 
           <div class="panel p-2 text-xs space-y-2">
@@ -780,6 +781,7 @@
         const redoBtn = document.getElementById('redoBtn');
         const resetViewBtn = document.getElementById('resetViewBtn');
         const fitViewBtn = document.getElementById('fitViewBtn');
+        const fitAllBtn = document.getElementById('fitAllBtn');
         const selectedLabelInput = document.getElementById('selectedLabelInput');
         const selectedCodeInput = document.getElementById('selectedCodeInput');
         const selectedColorInput = document.getElementById('selectedColorInput');
@@ -949,55 +951,71 @@
 	        }
 
         function setStatus(message) {
-          if (!statusLineEl) return;
-          statusLineEl.textContent = String(message || '');
-          if (state.statusTimer) window.clearTimeout(state.statusTimer);
-          if (message) {
-            state.statusTimer = window.setTimeout(() => {
-              statusLineEl.textContent = '';
-              state.statusTimer = null;
-            }, 3500);
+          try {
+            if (!statusLineEl) return;
+            statusLineEl.textContent = String(message || '');
+            if (state.statusTimer) window.clearTimeout(state.statusTimer);
+            if (message) {
+              state.statusTimer = window.setTimeout(() => {
+                statusLineEl.textContent = '';
+                state.statusTimer = null;
+              }, 3500);
+            }
+          } catch (error) {
+            logMessage(`Error in setStatus: ${error.message}`, 'error');
+            console.error('setStatus error:', error);
           }
         }
 
         function scheduleAutosave() {
-          if (!state.autosaveEnabled) return;
-          if (state.autosaveTimer) window.clearTimeout(state.autosaveTimer);
-          state.autosaveTimer = window.setTimeout(() => {
-            try {
-              const payload = serializeStatePayload();
-              localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
-            } catch (error) {
-              // ignore localStorage write errors (quota / private mode)
-            } finally {
-              state.autosaveTimer = null;
-            }
-          }, 250);
+          try {
+            if (!state.autosaveEnabled) return;
+            if (state.autosaveTimer) window.clearTimeout(state.autosaveTimer);
+            state.autosaveTimer = window.setTimeout(() => {
+              try {
+                const payload = serializeStatePayload();
+                localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
+                logMessage('Autosave completed', 'info');
+              } catch (error) {
+                logMessage(`Autosave failed: ${error.message}`, 'warning');
+                // ignore localStorage write errors (quota / private mode)
+              } finally {
+                state.autosaveTimer = null;
+              }
+            }, 250);
+          } catch (error) {
+            logMessage(`Error scheduling autosave: ${error.message}`, 'error');
+          }
         }
 
         function updateInfoLine() {
-          if (!infoLineEl) return;
-          const parts = [];
-          let modeText = 'DRAW';
-          if (state.mode === 'erase') modeText = 'ERASE';
-          else if (state.mode === 'drag') modeText = 'DRAG';
-          else if (state.mode === 'resize') modeText = 'RESIZE';
-          parts.push(modeText);
-          parts.push(`Z:${state.zoom.toFixed(2)}`);
-          parts.push(`P:${Math.round(state.panX)},${Math.round(state.panY)}`);
+          try {
+            if (!infoLineEl) return;
+            const parts = [];
+            let modeText = 'DRAW';
+            if (state.mode === 'erase') modeText = 'ERASE';
+            else if (state.mode === 'drag') modeText = 'DRAG';
+            else if (state.mode === 'resize') modeText = 'RESIZE';
+            parts.push(modeText);
+            parts.push(`Z:${state.zoom.toFixed(2)}`);
+            parts.push(`P:${Math.round(state.panX)},${Math.round(state.panY)}`);
 
-          if (state.hoveredCell) {
-            parts.push(`H:${state.hoveredCell.row},${state.hoveredCell.col}`);
+            if (state.hoveredCell) {
+              parts.push(`H:${state.hoveredCell.row},${state.hoveredCell.col}`);
+            }
+
+            const selected = findSelectedElement();
+            if (selected) {
+              const w = selected.endCol - selected.startCol + 1;
+              const h = selected.endRow - selected.startRow + 1;
+              parts.push(`S:[${selected.code}] ${selected.label} (${w}x${h})`);
+            }
+
+            infoLineEl.textContent = parts.join(' · ');
+          } catch (error) {
+            logMessage(`Error in updateInfoLine: ${error.message}`, 'error');
+            console.error('updateInfoLine error:', error);
           }
-
-          const selected = findSelectedElement();
-          if (selected) {
-            const w = selected.endCol - selected.startCol + 1;
-            const h = selected.endRow - selected.startRow + 1;
-            parts.push(`S:[${selected.code}] ${selected.label} (${w}x${h})`);
-          }
-
-          infoLineEl.textContent = parts.join(' · ');
         }
 
         function normalizeRect(a, b) {
@@ -2277,33 +2295,70 @@
         });
 
         fitViewBtn.addEventListener('click', () => {
-          if (state.elements.length === 0) {
-            setStatus('Nothing to fit.');
-            return;
+          try {
+            if (state.elements.length === 0) {
+              setStatus('Nothing to fit.');
+              return;
+            }
+            const minRow = Math.min(...state.elements.map((e) => e.startRow));
+            const minCol = Math.min(...state.elements.map((e) => e.startCol));
+            const maxRow = Math.max(...state.elements.map((e) => e.endRow));
+            const maxCol = Math.max(...state.elements.map((e) => e.endCol));
+
+            const contentW = (maxCol - minCol + 1) * CELL_SIZE;
+            const contentH = (maxRow - minRow + 1) * CELL_SIZE;
+            const contentX = AXIS_SIZE + (minCol - 1) * CELL_SIZE;
+            const contentY = AXIS_SIZE + (minRow - 1) * CELL_SIZE;
+
+            const viewportW = viewportEl.clientWidth || 1;
+            const viewportH = viewportEl.clientHeight || 1;
+            const pad = 60;
+            const scaleX = (viewportW - pad * 2) / contentW;
+            const scaleY = (viewportH - pad * 2) / contentH;
+            const nextZoom = Math.min(4, Math.max(0.4, Math.min(scaleX, scaleY)));
+
+            pushUndo();
+            state.zoom = nextZoom;
+            state.panX = viewportW / 2 - (contentX + contentW / 2) * nextZoom;
+            state.panY = viewportH / 2 - (contentY + contentH / 2) * nextZoom;
+            rerender();
+            scheduleAutosave();
+            logMessage('View fitted to elements', 'info');
+          } catch (error) {
+            logMessage(`Error fitting view: ${error.message}`, 'error');
+            setStatus('Error fitting view');
           }
-          const minRow = Math.min(...state.elements.map((e) => e.startRow));
-          const minCol = Math.min(...state.elements.map((e) => e.startCol));
-          const maxRow = Math.max(...state.elements.map((e) => e.endRow));
-          const maxCol = Math.max(...state.elements.map((e) => e.endCol));
+        });
 
-          const contentW = (maxCol - minCol + 1) * CELL_SIZE;
-          const contentH = (maxRow - minRow + 1) * CELL_SIZE;
-          const contentX = AXIS_SIZE + (minCol - 1) * CELL_SIZE;
-          const contentY = AXIS_SIZE + (minRow - 1) * CELL_SIZE;
+        fitAllBtn.addEventListener('click', () => {
+          try {
+            if (state.elements.length === 0) {
+              setStatus('No elements to fit.');
+              return;
+            }
+            // Fit to show entire grid with all elements
+            const gridW = (COLS + 1) * CELL_SIZE + AXIS_SIZE;
+            const gridH = (ROWS + 1) * CELL_SIZE + AXIS_SIZE;
 
-          const viewportW = viewportEl.clientWidth || 1;
-          const viewportH = viewportEl.clientHeight || 1;
-          const pad = 60;
-          const scaleX = (viewportW - pad * 2) / contentW;
-          const scaleY = (viewportH - pad * 2) / contentH;
-          const nextZoom = Math.min(4, Math.max(0.4, Math.min(scaleX, scaleY)));
+            const viewportW = viewportEl.clientWidth || 1;
+            const viewportH = viewportEl.clientHeight || 1;
+            const pad = 40;
+            const scaleX = (viewportW - pad * 2) / gridW;
+            const scaleY = (viewportH - pad * 2) / gridH;
+            const nextZoom = Math.min(2, Math.max(0.2, Math.min(scaleX, scaleY)));
 
-          pushUndo();
-          state.zoom = nextZoom;
-          state.panX = viewportW / 2 - (contentX + contentW / 2) * nextZoom;
-          state.panY = viewportH / 2 - (contentY + contentH / 2) * nextZoom;
-          rerender();
-          scheduleAutosave();
+            pushUndo();
+            state.zoom = nextZoom;
+            state.panX = (viewportW - gridW * nextZoom) / 2;
+            state.panY = (viewportH - gridH * nextZoom) / 2;
+            rerender();
+            scheduleAutosave();
+            logMessage('View fitted to entire grid', 'info');
+            setStatus('Fitted to entire grid');
+          } catch (error) {
+            logMessage(`Error fitting all: ${error.message}`, 'error');
+            setStatus('Error fitting to grid');
+          }
         });
 
         selectedLabelInput.addEventListener('change', () => {
