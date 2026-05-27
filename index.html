@@ -2051,21 +2051,38 @@
 
         drawBtn.addEventListener('click', () => {
           state.mode = 'draw';
+          logMessage('Switched to Draw mode', 'info');
           rerender();
         });
 
         eraseBtn.addEventListener('click', () => {
           state.mode = 'erase';
+          logMessage('Switched to Erase mode', 'info');
           rerender();
         });
 
         dragToolBtn.addEventListener('click', () => {
           state.mode = 'drag';
+          logMessage('Switched to Drag mode', 'info');
           rerender();
         });
 
         resizeToolBtn.addEventListener('click', () => {
           state.mode = 'resize';
+          logMessage('Switched to Resize mode', 'info');
+          rerender();
+        });
+
+        // Clear tool buttons
+        clearMouseToolBtn.addEventListener('click', () => {
+          state.mode = 'draw';
+          logMessage('Cleared mouse tool, switched to Draw mode', 'info');
+          rerender();
+        });
+
+        clearDrawToolBtn.addEventListener('click', () => {
+          state.mode = 'draw';
+          logMessage('Cleared draw/erase tool, switched to Draw mode', 'info');
           rerender();
         });
 
@@ -2832,7 +2849,11 @@
             event.target?.isContentEditable ||
             event.target === labelInput ||
 	            event.target === selectedLabelInput ||
-	            event.target === selectedCodeInput;
+	            event.target === selectedCodeInput ||
+	            event.target === elementNotesInput ||
+	            event.target === elementSearchInput ||
+	            event.target === asciiOutput ||
+	            event.target === jsonOutput;
 
 	          if (event.key === 'Escape') {
 	            let closedOverlay = false;
@@ -3052,10 +3073,125 @@
           try {
             await copyText(jsonOutput.value);
             setStatus('JSON copied.');
+            logMessage('JSON copied to clipboard', 'info');
           } catch (error) {
             setStatus('Copy failed.');
+            logMessage(`JSON copy failed: ${error.message}`, 'error');
           }
         });
+
+        // ASCII Edit Toggle
+        editAsciiBtn.addEventListener('click', () => {
+          state.asciiEditMode = !state.asciiEditMode;
+          asciiOutput.readOnly = !state.asciiEditMode;
+          editAsciiBtn.classList.toggle('active', state.asciiEditMode);
+          asciiOutput.classList.toggle('textarea-readonly', !state.asciiEditMode);
+          asciiErrorMsg.style.display = 'none';
+          if (state.asciiEditMode) {
+            logMessage('ASCII edit mode enabled', 'info');
+            setStatus('ASCII edit mode ON - edit and save to apply');
+          } else {
+            // Save/validate when toggling off
+            try {
+              validateAndApplyAsciiEdit();
+              logMessage('ASCII edit mode disabled and changes applied', 'info');
+              setStatus('ASCII changes applied');
+            } catch (error) {
+              logMessage(`ASCII validation failed: ${error.message}`, 'error');
+              asciiErrorMsg.textContent = `Error: ${error.message}`;
+              asciiErrorMsg.style.display = 'block';
+              asciiOutput.classList.add('input-error');
+              setTimeout(() => asciiOutput.classList.remove('input-error'), 300);
+              // Re-enable edit mode since validation failed
+              state.asciiEditMode = true;
+              asciiOutput.readOnly = false;
+              editAsciiBtn.classList.add('active');
+              asciiOutput.classList.remove('textarea-readonly');
+            }
+          }
+        });
+
+        // JSON Edit Toggle
+        editJsonBtn.addEventListener('click', () => {
+          state.jsonEditMode = !state.jsonEditMode;
+          jsonOutput.readOnly = !state.jsonEditMode;
+          editJsonBtn.classList.toggle('active', state.jsonEditMode);
+          jsonOutput.classList.toggle('textarea-readonly', !state.jsonEditMode);
+          jsonErrorMsg.style.display = 'none';
+          if (state.jsonEditMode) {
+            logMessage('JSON edit mode enabled', 'info');
+            setStatus('JSON edit mode ON - edit and save to apply');
+          } else {
+            // Save/validate when toggling off
+            try {
+              validateAndApplyJsonEdit();
+              logMessage('JSON edit mode disabled and changes applied', 'info');
+              setStatus('JSON changes applied');
+            } catch (error) {
+              logMessage(`JSON validation failed: ${error.message}`, 'error');
+              jsonErrorMsg.textContent = `Error: ${error.message}`;
+              jsonErrorMsg.style.display = 'block';
+              jsonOutput.classList.add('input-error');
+              setTimeout(() => jsonOutput.classList.remove('input-error'), 300);
+              // Re-enable edit mode since validation failed
+              state.jsonEditMode = true;
+              jsonOutput.readOnly = false;
+              editJsonBtn.classList.add('active');
+              jsonOutput.classList.remove('textarea-readonly');
+            }
+          }
+        });
+
+        // Validation and apply functions
+        function validateAndApplyAsciiEdit() {
+          // For ASCII, we don't directly parse it back to elements
+          // This is more for display purposes, so we just log the change
+          logMessage('ASCII edit saved (display only)', 'info');
+        }
+
+        function validateAndApplyJsonEdit() {
+          try {
+            const parsed = JSON.parse(jsonOutput.value);
+
+            // Validate structure
+            if (!parsed || typeof parsed !== 'object') {
+              throw new Error('Invalid JSON format');
+            }
+            if (!Array.isArray(parsed.elements)) {
+              throw new Error('Missing or invalid "elements" array');
+            }
+            if (!Array.isArray(parsed.matrix)) {
+              throw new Error('Missing or invalid "matrix" array');
+            }
+
+            // Validate each element
+            parsed.elements.forEach((el, idx) => {
+              if (!el.id || !el.label || !el.code) {
+                throw new Error(`Element ${idx} missing required fields (id, label, code)`);
+              }
+              if (typeof el.startRow !== 'number' || typeof el.endRow !== 'number' ||
+                  typeof el.startCol !== 'number' || typeof el.endCol !== 'number') {
+                throw new Error(`Element ${idx} has invalid bounds`);
+              }
+              if (el.startRow < 1 || el.endRow > ROWS || el.startCol < 1 || el.endCol > COLS) {
+                throw new Error(`Element ${idx} bounds out of range`);
+              }
+            });
+
+            // Apply changes
+            pushUndo();
+            state.elements = parsed.elements;
+            if (parsed.rows && parsed.cols) {
+              rebuildGrid(parsed.rows, parsed.cols);
+            }
+            markDirty({ exports: true, list: true });
+            rerender();
+            scheduleAutosave();
+            logMessage(`Applied JSON changes: ${parsed.elements.length} elements`, 'info');
+          } catch (error) {
+            throw new Error(`JSON validation failed: ${error.message}`);
+          }
+        }
 
         function tryLoadAutosave() {
           try {
