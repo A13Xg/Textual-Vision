@@ -89,9 +89,9 @@ Open `/index.html` in a browser (or serve the repo locally with something like `
 ### Export Formats
 - **Live ASCII** and **JSON** exports update as you edit.
 - **Editable Exports**: Click the ✎ (pencil) button to enable edit mode for ASCII/JSON outputs
-  - **JSON Edit Mode**: Manually edit canvas data with real-time validation
+  - **ASCII Edit Mode**: Copy-only (does not modify the canvas); toggle off to return to live output
+  - **JSON Edit Mode**: Manually edit canvas data; changes are validated and applied when you toggle edit off
   - **Validation**: Red border and error messages indicate invalid format
-  - **Live Preview**: Changes are applied to the canvas when you save (toggle edit off)
 - **PNG Export**: Download a visual snapshot of your canvas as a PNG image file (preserves colors and layout).
 - Toggle **Wrap Exports** to include (or omit) fenced code blocks in ASCII/JSON outputs.
 - Use **Copy** buttons to copy ASCII/JSON/YAML to the clipboard.

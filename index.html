@@ -672,6 +672,7 @@
           <div>
             <h3 class="heading mb-2">Text Editing & Export</h3>
             <p><strong>✎ Edit Button</strong> - Toggle edit mode for ASCII/JSON outputs</p>
+            <p><strong>ASCII Edit Mode</strong> - Copy-only (does not modify the canvas)</p>
             <p><strong>JSON Edit Mode</strong> - Manually edit and validate canvas data</p>
             <p><strong>Validation</strong> - Red border indicates invalid format on save</p>
             <p><strong>Note:</strong> Hotkeys (D, E, H, Delete) disabled in text inputs</p>
@@ -987,7 +988,6 @@
               try {
                 const payload = serializeStatePayload();
                 localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
-                logMessage('Autosave completed', 'info');
               } catch (error) {
                 logMessage(`Autosave failed: ${error.message}`, 'warning');
                 // ignore localStorage write errors (quota / private mode)
@@ -1172,9 +1172,22 @@
           return state.wrapExports ? ['```json', json, '```'].join('\n') : json;
         }
 
+        function unwrapCodeFence(text) {
+          const raw = String(text ?? '');
+          const normalized = raw.replace(/\r\n/g, '\n');
+          const lines = normalized.split('\n');
+          while (lines.length && lines[lines.length - 1] === '') lines.pop();
+          const first = (lines[0] ?? '').trim();
+          const last = (lines[lines.length - 1] ?? '').trim();
+          if (lines.length >= 2 && first.startsWith('```') && last === '```') {
+            return lines.slice(1, -1).join('\n');
+          }
+          return raw;
+        }
+
         function updateExports(matrix) {
-          asciiOutput.value = formatAscii(matrix);
-          jsonOutput.value = formatJson(matrix);
+          if (!state.asciiEditMode) asciiOutput.value = formatAscii(matrix);
+          if (!state.jsonEditMode) jsonOutput.value = formatJson(matrix);
         }
 
         function findSelectedElement() {
@@ -1263,6 +1276,8 @@
         function captureSnapshot() {
           return {
             mode: state.mode,
+            rows: ROWS,
+            cols: COLS,
             elements: state.elements.map((e) => ({ ...e })),
             panX: state.panX,
             panY: state.panY,
@@ -1275,7 +1290,11 @@
         }
 
         function applySnapshot(snap) {
-          state.mode = snap.mode === 'erase' ? 'erase' : 'draw';
+          if (Number.isInteger(snap.rows) && Number.isInteger(snap.cols) && (snap.rows !== ROWS || snap.cols !== COLS)) {
+            rebuildGrid(snap.rows, snap.cols, { rerenderNow: false, log: false });
+          }
+          const allowedModes = new Set(['draw', 'erase', 'drag', 'resize']);
+          state.mode = allowedModes.has(snap.mode) ? snap.mode : 'draw';
           state.elements = Array.isArray(snap.elements) ? snap.elements.map((e) => ({ ...e })) : [];
           state.panX = Number.isFinite(snap.panX) ? snap.panX : 120;
           state.panY = Number.isFinite(snap.panY) ? snap.panY : 80;
@@ -1491,7 +1510,7 @@
           gridEl.style.gridTemplateRows = `40px repeat(${ROWS}, 40px)`;
         }
 
-        function rebuildGrid(newRows, newCols) {
+        function rebuildGrid(newRows, newCols, { rerenderNow = true, log = true } = {}) {
           ROWS = newRows;
           COLS = newCols;
           state.rows = newRows;
@@ -1504,9 +1523,9 @@
           }
 
           setupGrid();
-          markDirty({ exports: true });
-          rerender();
-          logMessage(`Grid resized to ${newRows}x${newCols}`, 'info');
+          markDirty({ exports: true, list: true });
+          if (rerenderNow) rerender();
+          if (log) logMessage(`Grid resized to ${newRows}x${newCols}`, 'info');
         }
 
         function findContainingElementIndex(row, col) {
@@ -2027,6 +2046,20 @@
             throw new Error('Invalid YAML structure.');
           }
 
+          const nextRows = Number(payload.canvas?.rows);
+          const nextCols = Number(payload.canvas?.cols);
+          if (
+            Number.isInteger(nextRows) &&
+            Number.isInteger(nextCols) &&
+            nextRows >= 4 &&
+            nextRows <= 64 &&
+            nextCols >= 4 &&
+            nextCols <= 64 &&
+            (nextRows !== ROWS || nextCols !== COLS)
+          ) {
+            rebuildGrid(nextRows, nextCols, { rerenderNow: false });
+          }
+
           const elements = Array.isArray(payload.elements) ? payload.elements : [];
           state.elements = elements
             .map((item) => ({
@@ -2061,7 +2094,8 @@
           state.panX = Number.isFinite(transform.panX) ? transform.panX : 120;
           state.panY = Number.isFinite(transform.panY) ? transform.panY : 80;
           state.zoom = Number.isFinite(transform.zoom) ? Math.min(4, Math.max(0.4, transform.zoom)) : 1;
-          state.mode = payload.ui?.mode === 'erase' ? 'erase' : 'draw';
+          const allowedModes = new Set(['draw', 'erase', 'drag', 'resize']);
+          state.mode = allowedModes.has(payload.ui?.mode) ? payload.ui.mode : 'draw';
           state.allowOverlap = Boolean(payload.ui?.allowOverlap);
           allowOverlapToggle.checked = state.allowOverlap;
           state.wrapExports = payload.ui?.wrapExports !== false;
@@ -2344,13 +2378,9 @@
 
         fitAllBtn.addEventListener('click', () => {
           try {
-            if (state.elements.length === 0) {
-              setStatus('No elements to fit.');
-              return;
-            }
             // Fit to show entire grid with all elements
-            const gridW = (COLS + 1) * CELL_SIZE + AXIS_SIZE;
-            const gridH = (ROWS + 1) * CELL_SIZE + AXIS_SIZE;
+            const gridW = AXIS_SIZE + COLS * CELL_SIZE;
+            const gridH = AXIS_SIZE + ROWS * CELL_SIZE;
 
             const viewportW = viewportEl.clientWidth || 1;
             const viewportH = viewportEl.clientHeight || 1;
@@ -3190,26 +3220,14 @@
           asciiOutput.classList.toggle('textarea-readonly', !state.asciiEditMode);
           asciiErrorMsg.style.display = 'none';
           if (state.asciiEditMode) {
-            logMessage('ASCII edit mode enabled', 'info');
-            setStatus('ASCII edit mode ON - edit and save to apply');
+            asciiOutput.value = unwrapCodeFence(asciiOutput.value);
+            logMessage('ASCII edit mode enabled (copy-only)', 'info');
+            setStatus('ASCII edit mode ON (copy-only)');
           } else {
-            // Save/validate when toggling off
-            try {
-              validateAndApplyAsciiEdit();
-              logMessage('ASCII edit mode disabled and changes applied', 'info');
-              setStatus('ASCII changes applied');
-            } catch (error) {
-              logMessage(`ASCII validation failed: ${error.message}`, 'error');
-              asciiErrorMsg.textContent = `Error: ${error.message}`;
-              asciiErrorMsg.style.display = 'block';
-              asciiOutput.classList.add('input-error');
-              setTimeout(() => asciiOutput.classList.remove('input-error'), 300);
-              // Re-enable edit mode since validation failed
-              state.asciiEditMode = true;
-              asciiOutput.readOnly = false;
-              editAsciiBtn.classList.add('active');
-              asciiOutput.classList.remove('textarea-readonly');
-            }
+            logMessage('ASCII edit mode disabled (changes not applied)', 'info');
+            setStatus('ASCII edit mode OFF');
+            markDirty({ exports: true });
+            rerender();
           }
         });
 
@@ -3221,6 +3239,7 @@
           jsonOutput.classList.toggle('textarea-readonly', !state.jsonEditMode);
           jsonErrorMsg.style.display = 'none';
           if (state.jsonEditMode) {
+            jsonOutput.value = unwrapCodeFence(jsonOutput.value);
             logMessage('JSON edit mode enabled', 'info');
             setStatus('JSON edit mode ON - edit and save to apply');
           } else {
@@ -3244,16 +3263,9 @@
           }
         });
 
-        // Validation and apply functions
-        function validateAndApplyAsciiEdit() {
-          // For ASCII, we don't directly parse it back to elements
-          // This is more for display purposes, so we just log the change
-          logMessage('ASCII edit saved (display only)', 'info');
-        }
-
         function validateAndApplyJsonEdit() {
           try {
-            const parsed = JSON.parse(jsonOutput.value);
+            const parsed = JSON.parse(unwrapCodeFence(jsonOutput.value));
 
             // Validate structure
             if (!parsed || typeof parsed !== 'object') {
@@ -3262,34 +3274,72 @@
             if (!Array.isArray(parsed.elements)) {
               throw new Error('Missing or invalid "elements" array');
             }
-            if (!Array.isArray(parsed.matrix)) {
-              throw new Error('Missing or invalid "matrix" array');
+
+            const targetRows = Number.isFinite(Number(parsed.rows)) ? Number(parsed.rows) : ROWS;
+            const targetCols = Number.isFinite(Number(parsed.cols)) ? Number(parsed.cols) : COLS;
+            if (
+              !Number.isInteger(targetRows) ||
+              !Number.isInteger(targetCols) ||
+              targetRows < 4 ||
+              targetRows > 64 ||
+              targetCols < 4 ||
+              targetCols > 64
+            ) {
+              throw new Error('Invalid or out-of-range "rows"/"cols" (must be integers 4-64)');
             }
 
-            // Validate each element
-            parsed.elements.forEach((el, idx) => {
-              if (!el.id || !el.label || !el.code) {
+            const nextElements = parsed.elements.map((el, idx) => {
+              if (!el || typeof el !== 'object') {
+                throw new Error(`Element ${idx} is not an object`);
+              }
+              const id = String(el.id || '').trim();
+              const label = sanitizeLabel(el.label);
+              const code = String(el.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 2);
+              if (!id || !label || code.length !== 2) {
                 throw new Error(`Element ${idx} missing required fields (id, label, code)`);
               }
-              if (typeof el.startRow !== 'number' || typeof el.endRow !== 'number' ||
-                  typeof el.startCol !== 'number' || typeof el.endCol !== 'number') {
-                throw new Error(`Element ${idx} has invalid bounds`);
+
+              const startRow = Number(el.startRow);
+              const endRow = Number(el.endRow);
+              const startCol = Number(el.startCol);
+              const endCol = Number(el.endCol);
+              if (![startRow, endRow, startCol, endCol].every(Number.isInteger)) {
+                throw new Error(`Element ${idx} has invalid bounds (must be integers)`);
               }
-              if (el.startRow < 1 || el.endRow > ROWS || el.startCol < 1 || el.endCol > COLS) {
+              if (startRow < 1 || endRow > targetRows || startCol < 1 || endCol > targetCols) {
                 throw new Error(`Element ${idx} bounds out of range`);
               }
+              if (startRow > endRow || startCol > endCol) {
+                throw new Error(`Element ${idx} bounds are inverted`);
+              }
+
+              return {
+                id,
+                label,
+                code,
+                startRow,
+                endRow,
+                startCol,
+                endCol,
+                color: el.color || COLOR_PALETTE[0].value,
+                type: el.type || 'Web-Object',
+                notes: el.notes || ''
+              };
             });
 
             // Apply changes
             pushUndo();
-            state.elements = parsed.elements;
-            if (parsed.rows && parsed.cols) {
-              rebuildGrid(parsed.rows, parsed.cols);
+            if (targetRows !== ROWS || targetCols !== COLS) {
+              rebuildGrid(targetRows, targetCols, { rerenderNow: false });
             }
+            state.elements = nextElements;
+            state.selectedId = null;
+            state.selectedIds = [];
+            syncSelectionPanel();
             markDirty({ exports: true, list: true });
             rerender();
             scheduleAutosave();
-            logMessage(`Applied JSON changes: ${parsed.elements.length} elements`, 'info');
+            logMessage(`Applied JSON changes: ${nextElements.length} elements`, 'info');
           } catch (error) {
             throw new Error(`JSON validation failed: ${error.message}`);
           }
