@@ -643,13 +643,14 @@
           <div>
             <h3 class="heading mb-2">Drawing & Editing</h3>
             <p><strong>D</strong> - Switch to Draw mode</p>
-            <p><strong>E</strong> - Switch to Erase mode</p>
-            <p><strong>Click & Drag</strong> - Draw a new rectangle</p>
+            <p><strong>E</strong> - Switch to Erase mode (drag to delete all elements in box)</p>
+            <p><strong>Click & Drag</strong> - Draw a new rectangle or erase area</p>
             <p><strong>Shift + Click</strong> - Start drawing on occupied cells</p>
             <p><strong>Click</strong> - Select an element</p>
             <p><strong>Alt + Click</strong> - Cycle through overlapped elements</p>
             <p><strong>Ctrl/Cmd + Click</strong> - Multi-select elements</p>
-            <p><strong>Esc</strong> - Cancel drawing / Clear selection</p>
+            <p><strong>Esc</strong> - Cancel drawing / Clear selection / Clear tool</p>
+            <p><strong>X Button</strong> - Clear current tool selection (in tool panels)</p>
           </div>
           <div>
             <h3 class="heading mb-2">Navigation</h3>
@@ -657,6 +658,8 @@
             <p><strong>Middle Mouse Drag</strong> - Pan viewport</p>
             <p><strong>Space + Left Drag</strong> - Pan viewport (alternative)</p>
             <p><strong>F</strong> - Focus selected element (center in view)</p>
+            <p><strong>Fit Button</strong> - Fit view to elements</p>
+            <p><strong>Fit All Elements Button</strong> - Fit entire grid in view</p>
           </div>
           <div>
             <h3 class="heading mb-2">Selection Editing</h3>
@@ -664,7 +667,14 @@
             <p><strong>Shift + Arrows</strong> - Nudge selected element (5 cells)</p>
             <p><strong>Alt + Arrows</strong> - Resize selected element (1 cell)</p>
             <p><strong>Alt + Shift + Arrows</strong> - Resize selected element (5 cells)</p>
-            <p><strong>Delete / Backspace</strong> - Delete selected element</p>
+            <p><strong>Delete / Backspace</strong> - Delete selected element (not in text inputs)</p>
+          </div>
+          <div>
+            <h3 class="heading mb-2">Text Editing & Export</h3>
+            <p><strong>✎ Edit Button</strong> - Toggle edit mode for ASCII/JSON outputs</p>
+            <p><strong>JSON Edit Mode</strong> - Manually edit and validate canvas data</p>
+            <p><strong>Validation</strong> - Red border indicates invalid format on save</p>
+            <p><strong>Note:</strong> Hotkeys (D, E, H, Delete) disabled in text inputs</p>
           </div>
           <div>
             <h3 class="heading mb-2">Undo & Redo</h3>
@@ -672,8 +682,10 @@
             <p><strong>Ctrl + Y</strong> or <strong>Ctrl/Cmd + Shift + Z</strong> - Redo</p>
           </div>
           <div>
-            <h3 class="heading mb-2">Help</h3>
+            <h3 class="heading mb-2">Help & Logs</h3>
             <p><strong>H</strong> or <strong>?</strong> - Show this help dialog</p>
+            <p><strong>Settings → Show Logs</strong> - View application activity log</p>
+            <p><strong>Comprehensive logging</strong> - All actions logged for debugging</p>
           </div>
         </div>
       </div>
