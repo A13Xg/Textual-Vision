@@ -1531,20 +1531,11 @@
             return;
           }
           if (state.mode === 'erase') {
-            const idx = findContainingElementIndex(row, col);
-            if (idx !== -1) {
-              pushUndo();
-              state.elements.splice(idx, 1);
-              if (state.selectedId && !state.elements.some((e) => e.id === state.selectedId)) {
-                state.selectedId = null;
-                syncSelectionPanel();
-              }
-              state.selectedIds = state.selectedIds.filter((id) => state.elements.some((e) => e.id === id));
-              markDirty({ exports: true, list: true });
-              rerender();
-              scheduleAutosave();
-              logMessage('Element erased', 'info');
-            }
+            // Start erase rectangle selection
+            state.isMouseDrawing = true;
+            state.drawingStart = { row, col };
+            state.drawingEnd = { row, col };
+            rerender();
             return;
           }
 
@@ -1671,42 +1662,81 @@
 
         function onPointerUpAnywhere() {
           if (state.isMouseDrawing && state.drawingStart && state.drawingEnd) {
-            // Validate title
-            const labelValue = labelInput.value.trim();
-            if (!labelValue) {
-              labelInput.classList.add('input-error');
-              setTimeout(() => labelInput.classList.remove('input-error'), 300);
-              setStatus('Title is required to draw an object');
-              logMessage('Drawing blocked: Title is required', 'warning');
-              state.isMouseDrawing = false;
-              state.drawingStart = null;
-              state.drawingEnd = null;
-              rerender();
-              return;
-            }
-
-            const rect = normalizeRect(state.drawingStart, state.drawingEnd);
-            if (!state.allowOverlap && rectOverlapsAny(rect)) {
-              setStatus('Overlap blocked (toggle Allow Overlap to permit).');
-              logMessage('Drawing blocked: Overlap detected', 'warning');
-            } else {
+            if (state.mode === 'erase') {
+              // Erase mode: delete all cells within the drawn rectangle
+              const rect = normalizeRect(state.drawingStart, state.drawingEnd);
               pushUndo();
-              const newEl = {
-                id: makeId(),
-                label: sanitizeLabel(labelInput.value),
-                code: generateUniqueCode(labelInput.value),
-                color: state.selectedColor,
-                type: state.objectType,
-                notes: '',
-                ...rect
-              };
-              state.elements.push(newEl);
-              state.selectedId = newEl.id;
-              state.selectedIds = [];
+
+              let deletedCount = 0;
+              // Go through all elements and check if they overlap with the erase rect
+              state.elements = state.elements.filter((element) => {
+                // Check if element overlaps with erase rectangle
+                const overlaps = !(
+                  element.endRow < rect.startRow ||
+                  element.startRow > rect.endRow ||
+                  element.endCol < rect.startCol ||
+                  element.startCol > rect.endCol
+                );
+
+                if (overlaps) {
+                  // Element overlaps, so we need to remove overlapping cells
+                  // For simplicity, we'll remove the entire element if any part overlaps
+                  deletedCount++;
+                  return false; // Remove this element
+                }
+                return true; // Keep this element
+              });
+
+              // Clean up selection if needed
+              if (state.selectedId && !state.elements.some((e) => e.id === state.selectedId)) {
+                state.selectedId = null;
+              }
+              state.selectedIds = state.selectedIds.filter((id) => state.elements.some((e) => e.id === id));
+
               syncSelectionPanel();
               markDirty({ exports: true, list: true });
               scheduleAutosave();
-              logMessage(`Element created: ${newEl.label} [${newEl.code}]`, 'info');
+              logMessage(`Erased ${deletedCount} element(s) in selection`, 'info');
+              setStatus(`Erased ${deletedCount} element(s)`);
+            } else {
+              // Draw mode: create new element
+              // Validate title
+              const labelValue = labelInput.value.trim();
+              if (!labelValue) {
+                labelInput.classList.add('input-error');
+                setTimeout(() => labelInput.classList.remove('input-error'), 300);
+                setStatus('Title is required to draw an object');
+                logMessage('Drawing blocked: Title is required', 'warning');
+                state.isMouseDrawing = false;
+                state.drawingStart = null;
+                state.drawingEnd = null;
+                rerender();
+                return;
+              }
+
+              const rect = normalizeRect(state.drawingStart, state.drawingEnd);
+              if (!state.allowOverlap && rectOverlapsAny(rect)) {
+                setStatus('Overlap blocked (toggle Allow Overlap to permit).');
+                logMessage('Drawing blocked: Overlap detected', 'warning');
+              } else {
+                pushUndo();
+                const newEl = {
+                  id: makeId(),
+                  label: sanitizeLabel(labelInput.value),
+                  code: generateUniqueCode(labelInput.value),
+                  color: state.selectedColor,
+                  type: state.objectType,
+                  notes: '',
+                  ...rect
+                };
+                state.elements.push(newEl);
+                state.selectedId = newEl.id;
+                state.selectedIds = [];
+                syncSelectionPanel();
+                markDirty({ exports: true, list: true });
+                scheduleAutosave();
+                logMessage(`Element created: ${newEl.label} [${newEl.code}]`, 'info');
+              }
             }
           }
 
@@ -2984,7 +3014,7 @@
             rerender();
             return;
           }
-          if (event.key === 'Delete' || event.key === 'Backspace') {
+          if ((event.key === 'Delete' || event.key === 'Backspace') && !isEditable) {
             const selected = findSelectedElement();
             if (selected) {
               event.preventDefault();
@@ -2992,20 +3022,25 @@
             }
             return;
           }
-          if (!event.ctrlKey && !event.metaKey) {
+          if (!event.ctrlKey && !event.metaKey && !isEditable) {
             if (event.key.toLowerCase() === 'd') {
+              event.preventDefault();
               state.mode = 'draw';
+              logMessage('Switched to Draw mode (hotkey)', 'info');
               rerender();
               return;
             }
             if (event.key.toLowerCase() === 'e') {
+              event.preventDefault();
               state.mode = 'erase';
+              logMessage('Switched to Erase mode (hotkey)', 'info');
               rerender();
               return;
             }
             if (event.key.toLowerCase() === 'h' || event.key === '?') {
               event.preventDefault();
               helpModal.style.display = 'flex';
+              logMessage('Help modal opened', 'info');
               return;
             }
           }
