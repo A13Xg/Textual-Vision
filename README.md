@@ -63,15 +63,22 @@ Open `/index.html` in a browser (or serve the repo locally with something like `
 
 ### Keyboard Shortcuts
 - `D`: draw mode
-- `E`: erase mode
+- `E`: erase mode (drag a box to delete all elements within)
 - `F`: focus/center the selected element in the viewport
 - `H` or `?`: show keyboard shortcuts help dialog
-- `Esc`: cancel current draw / deselect / clear selection
-- `Delete` / `Backspace`: delete selected element(s)
+- `Esc`: cancel current draw / deselect / clear selection / clear tool
+- `Delete` / `Backspace`: delete selected element(s) (disabled in text inputs)
 - `Ctrl/Cmd+Z`: undo
 - `Ctrl+Y` (or `Ctrl/Cmd+Shift+Z`): redo
 - Arrow keys: nudge selected element (`Shift` = 5 cells)
 - `Alt` + Arrow keys: resize selected element (`Shift` = 5 cells)
+- **Note:** Hotkeys are disabled when typing in text inputs to prevent accidental actions
+
+### Tool Selection
+- **Clear Tool Buttons (X)**: Quickly clear the current tool selection and return to draw mode
+- **Active Tool Highlighting**: The currently selected tool is visually highlighted
+- **Mouse Tools**: Drag Element and Resize Element modes with ghost outline preview
+- **Toggleable Tools**: All tools can be toggled on/off for better workflow control
 
 ## Storage & Export
 
@@ -81,6 +88,10 @@ Open `/index.html` in a browser (or serve the repo locally with something like `
 
 ### Export Formats
 - **Live ASCII** and **JSON** exports update as you edit.
+- **Editable Exports**: Click the ✎ (pencil) button to enable edit mode for ASCII/JSON outputs
+  - **ASCII Edit Mode**: Copy-only (does not modify the canvas); toggle off to return to live output
+  - **JSON Edit Mode**: Manually edit canvas data; changes are validated and applied when you toggle edit off
+  - **Validation**: Red border and error messages indicate invalid format
 - **PNG Export**: Download a visual snapshot of your canvas as a PNG image file (preserves colors and layout).
 - Toggle **Wrap Exports** to include (or omit) fenced code blocks in ASCII/JSON outputs.
 - Use **Copy** buttons to copy ASCII/JSON/YAML to the clipboard.
@@ -103,7 +114,23 @@ Open `/index.html` in a browser (or serve the repo locally with something like `
 
 ### Logging
 - Open **Settings → Show Logs** to view timestamped application logs (info/warn/error).
+- **Comprehensive Logging**: All user actions, tool switches, and operations are logged
+- **Error Handling**: Graceful error recovery with detailed error logging
 - Use **Clear Logs** to reset the in-memory log stream and **Export Logs** to download a `.log` file.
+- Logs help debug issues and track application behavior
+
+## Advanced Features
+
+### Enhanced Drawing & Selection
+- **Visible Selection Rectangle**: Selection box is clearly visible while drawing
+- **Erase as Inverse Draw**: Drag a box in erase mode to delete all elements within the selection
+- **Active Tool Highlighting**: Currently selected tool is visually highlighted with border
+- **Clear Tool Buttons**: Small X buttons to quickly clear tool selection
+
+### View Controls
+- **Fit All Elements**: New button to fit the entire grid in the viewport
+- **Fit to Elements**: Existing fit button focuses on actual elements only
+- **Reset View**: Return to default pan and zoom
 
 ## Notes
 

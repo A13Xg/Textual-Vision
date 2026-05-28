@@ -156,11 +156,16 @@
 
       .cell.preview {
         background: rgba(120, 105, 196, 0.45);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
       }
 
       .cell.preview.overlap {
         background: rgba(255, 99, 71, 0.45);
         box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7);
+      }
+
+      .cell.selection-rect {
+        box-shadow: inset 0 0 0 2px #00ffff, inset 0 0 0 4px rgba(0, 255, 255, 0.3);
       }
 
       .cell.selected {
@@ -297,6 +302,58 @@
         75% { transform: translateX(5px); }
       }
 
+      /* Clear Tool Button */
+      .clear-tool-btn {
+        position: absolute;
+        top: 0.25rem;
+        right: 0.25rem;
+        width: 24px;
+        height: 24px;
+        background: #ff4444;
+        color: #ffffff;
+        border: 1px solid #cc0000;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        z-index: 10;
+        transition: all 0.2s ease;
+      }
+
+      .clear-tool-btn:hover {
+        background: #ff6666;
+        transform: scale(1.1);
+      }
+
+      /* Edit/Save Toggle Button */
+      .edit-toggle-btn {
+        background: var(--c64-border);
+        color: var(--c64-bg);
+        border: 2px solid var(--c64-heading);
+        padding: 0.3rem 0.6rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-weight: bold;
+      }
+
+      .edit-toggle-btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .edit-toggle-btn.active {
+        background: #00ff00;
+        color: #000000;
+        border-color: #00cc00;
+      }
+
+      .textarea-readonly {
+        opacity: 0.7;
+        background: rgba(58, 42, 122, 0.5) !important;
+      }
+
       /* Modern Cubism Theme Styles */
       .cubism {
         background: #1a2e50;
@@ -418,15 +475,17 @@
 
           <button id="applyGridSizeBtn" class="c64-button w-full" type="button">Apply Grid Size</button>
 
-          <div class="panel p-2 text-xs space-y-2">
+          <div class="panel p-2 text-xs space-y-2 relative">
             <h3 class="text-xs">Mouse Tools</h3>
             <button id="dragToolBtn" class="c64-button w-full" type="button">Drag Element</button>
             <button id="resizeToolBtn" class="c64-button w-full" type="button">Resize Element</button>
+            <button id="clearMouseToolBtn" class="clear-tool-btn" type="button" title="Clear tool selection (Esc)">×</button>
           </div>
 
-          <div class="grid grid-cols-2 gap-2">
+          <div class="grid grid-cols-2 gap-2 relative">
             <button id="drawToolBtn" class="c64-button active" type="button">Draw</button>
             <button id="eraseToolBtn" class="c64-button" type="button">Erase</button>
+            <button id="clearDrawToolBtn" class="clear-tool-btn" type="button" style="top: 0.5rem; right: 0.5rem;" title="Clear tool selection (Esc)">×</button>
           </div>
 
           <button id="clearCanvasBtn" class="c64-button w-full" type="button">Clear Canvas</button>
@@ -452,6 +511,7 @@
               <button id="resetViewBtn" class="c64-button flex-1" type="button">Reset View</button>
               <button id="fitViewBtn" class="c64-button flex-1" type="button">Fit</button>
             </div>
+            <button id="fitAllBtn" class="c64-button w-full" type="button">Fit All Elements</button>
           </div>
 
           <div class="panel p-2 text-xs space-y-2">
@@ -546,17 +606,25 @@
           <div class="space-y-1">
             <div class="flex items-center justify-between gap-2">
               <h3 class="text-xs">ASCII Art Grid Map</h3>
-              <button id="copyAsciiBtn" class="c64-button" type="button">Copy</button>
+              <div class="flex gap-2">
+                <button id="editAsciiBtn" class="edit-toggle-btn" type="button" title="Toggle edit mode">✎</button>
+                <button id="copyAsciiBtn" class="c64-button" type="button">Copy</button>
+              </div>
             </div>
-            <textarea id="asciiOutput" class="c64-textarea" readonly></textarea>
+            <textarea id="asciiOutput" class="c64-textarea textarea-readonly" readonly></textarea>
+            <div id="asciiErrorMsg" class="text-red-400 text-xs" style="display: none;"></div>
           </div>
 
           <div class="space-y-1">
             <div class="flex items-center justify-between gap-2">
               <h3 class="text-xs">Structured JSON Matrix</h3>
-              <button id="copyJsonBtn" class="c64-button" type="button">Copy</button>
+              <div class="flex gap-2">
+                <button id="editJsonBtn" class="edit-toggle-btn" type="button" title="Toggle edit mode">✎</button>
+                <button id="copyJsonBtn" class="c64-button" type="button">Copy</button>
+              </div>
             </div>
-            <textarea id="jsonOutput" class="c64-textarea" readonly></textarea>
+            <textarea id="jsonOutput" class="c64-textarea textarea-readonly" readonly></textarea>
+            <div id="jsonErrorMsg" class="text-red-400 text-xs" style="display: none;"></div>
           </div>
 
           <button id="copyYamlBtn" class="c64-button w-full" type="button">Copy YAML</button>
@@ -575,13 +643,14 @@
           <div>
             <h3 class="heading mb-2">Drawing & Editing</h3>
             <p><strong>D</strong> - Switch to Draw mode</p>
-            <p><strong>E</strong> - Switch to Erase mode</p>
-            <p><strong>Click & Drag</strong> - Draw a new rectangle</p>
+            <p><strong>E</strong> - Switch to Erase mode (drag to delete all elements in box)</p>
+            <p><strong>Click & Drag</strong> - Draw a new rectangle or erase area</p>
             <p><strong>Shift + Click</strong> - Start drawing on occupied cells</p>
             <p><strong>Click</strong> - Select an element</p>
             <p><strong>Alt + Click</strong> - Cycle through overlapped elements</p>
             <p><strong>Ctrl/Cmd + Click</strong> - Multi-select elements</p>
-            <p><strong>Esc</strong> - Cancel drawing / Clear selection</p>
+            <p><strong>Esc</strong> - Cancel drawing / Clear selection / Clear tool</p>
+            <p><strong>X Button</strong> - Clear current tool selection (in tool panels)</p>
           </div>
           <div>
             <h3 class="heading mb-2">Navigation</h3>
@@ -589,6 +658,8 @@
             <p><strong>Middle Mouse Drag</strong> - Pan viewport</p>
             <p><strong>Space + Left Drag</strong> - Pan viewport (alternative)</p>
             <p><strong>F</strong> - Focus selected element (center in view)</p>
+            <p><strong>Fit Button</strong> - Fit view to elements</p>
+            <p><strong>Fit All Elements Button</strong> - Fit entire grid in view</p>
           </div>
           <div>
             <h3 class="heading mb-2">Selection Editing</h3>
@@ -596,7 +667,15 @@
             <p><strong>Shift + Arrows</strong> - Nudge selected element (5 cells)</p>
             <p><strong>Alt + Arrows</strong> - Resize selected element (1 cell)</p>
             <p><strong>Alt + Shift + Arrows</strong> - Resize selected element (5 cells)</p>
-            <p><strong>Delete / Backspace</strong> - Delete selected element</p>
+            <p><strong>Delete / Backspace</strong> - Delete selected element (not in text inputs)</p>
+          </div>
+          <div>
+            <h3 class="heading mb-2">Text Editing & Export</h3>
+            <p><strong>✎ Edit Button</strong> - Toggle edit mode for ASCII/JSON outputs</p>
+            <p><strong>ASCII Edit Mode</strong> - Copy-only (does not modify the canvas)</p>
+            <p><strong>JSON Edit Mode</strong> - Manually edit and validate canvas data</p>
+            <p><strong>Validation</strong> - Red border indicates invalid format on save</p>
+            <p><strong>Note:</strong> Hotkeys (D, E, H, Delete) disabled in text inputs</p>
           </div>
           <div>
             <h3 class="heading mb-2">Undo & Redo</h3>
@@ -604,8 +683,10 @@
             <p><strong>Ctrl + Y</strong> or <strong>Ctrl/Cmd + Shift + Z</strong> - Redo</p>
           </div>
           <div>
-            <h3 class="heading mb-2">Help</h3>
+            <h3 class="heading mb-2">Help & Logs</h3>
             <p><strong>H</strong> or <strong>?</strong> - Show this help dialog</p>
+            <p><strong>Settings → Show Logs</strong> - View application activity log</p>
+            <p><strong>Comprehensive logging</strong> - All actions logged for debugging</p>
           </div>
         </div>
       </div>
@@ -713,6 +794,7 @@
         const redoBtn = document.getElementById('redoBtn');
         const resetViewBtn = document.getElementById('resetViewBtn');
         const fitViewBtn = document.getElementById('fitViewBtn');
+        const fitAllBtn = document.getElementById('fitAllBtn');
         const selectedLabelInput = document.getElementById('selectedLabelInput');
         const selectedCodeInput = document.getElementById('selectedCodeInput');
         const selectedColorInput = document.getElementById('selectedColorInput');
@@ -767,6 +849,12 @@
 	        const logOutput = document.getElementById('logOutput');
 	        const contextMenu = document.getElementById('contextMenu');
 	        const contextMenuContent = document.getElementById('contextMenuContent');
+	        const clearMouseToolBtn = document.getElementById('clearMouseToolBtn');
+	        const clearDrawToolBtn = document.getElementById('clearDrawToolBtn');
+	        const editAsciiBtn = document.getElementById('editAsciiBtn');
+	        const editJsonBtn = document.getElementById('editJsonBtn');
+	        const asciiErrorMsg = document.getElementById('asciiErrorMsg');
+	        const jsonErrorMsg = document.getElementById('jsonErrorMsg');
 
 	        function setTitle(el, text) {
 	          if (!el) return;
@@ -828,6 +916,8 @@
           allowOverlap: false,
           autosaveEnabled: true,
           wrapExports: true,
+          asciiEditMode: false,
+          jsonEditMode: false,
           dirty: {
             exports: true,
             list: true
@@ -874,55 +964,70 @@
 	        }
 
         function setStatus(message) {
-          if (!statusLineEl) return;
-          statusLineEl.textContent = String(message || '');
-          if (state.statusTimer) window.clearTimeout(state.statusTimer);
-          if (message) {
-            state.statusTimer = window.setTimeout(() => {
-              statusLineEl.textContent = '';
-              state.statusTimer = null;
-            }, 3500);
+          try {
+            if (!statusLineEl) return;
+            statusLineEl.textContent = String(message || '');
+            if (state.statusTimer) window.clearTimeout(state.statusTimer);
+            if (message) {
+              state.statusTimer = window.setTimeout(() => {
+                statusLineEl.textContent = '';
+                state.statusTimer = null;
+              }, 3500);
+            }
+          } catch (error) {
+            logMessage(`Error in setStatus: ${error.message}`, 'error');
+            console.error('setStatus error:', error);
           }
         }
 
         function scheduleAutosave() {
-          if (!state.autosaveEnabled) return;
-          if (state.autosaveTimer) window.clearTimeout(state.autosaveTimer);
-          state.autosaveTimer = window.setTimeout(() => {
-            try {
-              const payload = serializeStatePayload();
-              localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
-            } catch (error) {
-              // ignore localStorage write errors (quota / private mode)
-            } finally {
-              state.autosaveTimer = null;
-            }
-          }, 250);
+          try {
+            if (!state.autosaveEnabled) return;
+            if (state.autosaveTimer) window.clearTimeout(state.autosaveTimer);
+            state.autosaveTimer = window.setTimeout(() => {
+              try {
+                const payload = serializeStatePayload();
+                localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(payload));
+              } catch (error) {
+                logMessage(`Autosave failed: ${error.message}`, 'warning');
+                // ignore localStorage write errors (quota / private mode)
+              } finally {
+                state.autosaveTimer = null;
+              }
+            }, 250);
+          } catch (error) {
+            logMessage(`Error scheduling autosave: ${error.message}`, 'error');
+          }
         }
 
         function updateInfoLine() {
-          if (!infoLineEl) return;
-          const parts = [];
-          let modeText = 'DRAW';
-          if (state.mode === 'erase') modeText = 'ERASE';
-          else if (state.mode === 'drag') modeText = 'DRAG';
-          else if (state.mode === 'resize') modeText = 'RESIZE';
-          parts.push(modeText);
-          parts.push(`Z:${state.zoom.toFixed(2)}`);
-          parts.push(`P:${Math.round(state.panX)},${Math.round(state.panY)}`);
+          try {
+            if (!infoLineEl) return;
+            const parts = [];
+            let modeText = 'DRAW';
+            if (state.mode === 'erase') modeText = 'ERASE';
+            else if (state.mode === 'drag') modeText = 'DRAG';
+            else if (state.mode === 'resize') modeText = 'RESIZE';
+            parts.push(modeText);
+            parts.push(`Z:${state.zoom.toFixed(2)}`);
+            parts.push(`P:${Math.round(state.panX)},${Math.round(state.panY)}`);
 
-          if (state.hoveredCell) {
-            parts.push(`H:${state.hoveredCell.row},${state.hoveredCell.col}`);
+            if (state.hoveredCell) {
+              parts.push(`H:${state.hoveredCell.row},${state.hoveredCell.col}`);
+            }
+
+            const selected = findSelectedElement();
+            if (selected) {
+              const w = selected.endCol - selected.startCol + 1;
+              const h = selected.endRow - selected.startRow + 1;
+              parts.push(`S:[${selected.code}] ${selected.label} (${w}x${h})`);
+            }
+
+            infoLineEl.textContent = parts.join(' · ');
+          } catch (error) {
+            logMessage(`Error in updateInfoLine: ${error.message}`, 'error');
+            console.error('updateInfoLine error:', error);
           }
-
-          const selected = findSelectedElement();
-          if (selected) {
-            const w = selected.endCol - selected.startCol + 1;
-            const h = selected.endRow - selected.startRow + 1;
-            parts.push(`S:[${selected.code}] ${selected.label} (${w}x${h})`);
-          }
-
-          infoLineEl.textContent = parts.join(' · ');
         }
 
         function normalizeRect(a, b) {
@@ -1067,9 +1172,22 @@
           return state.wrapExports ? ['```json', json, '```'].join('\n') : json;
         }
 
+        function unwrapCodeFence(text) {
+          const raw = String(text ?? '');
+          const normalized = raw.replace(/\r\n/g, '\n');
+          const lines = normalized.split('\n');
+          while (lines.length && lines[lines.length - 1] === '') lines.pop();
+          const first = (lines[0] ?? '').trim();
+          const last = (lines[lines.length - 1] ?? '').trim();
+          if (lines.length >= 2 && first.startsWith('```') && last === '```') {
+            return lines.slice(1, -1).join('\n');
+          }
+          return raw;
+        }
+
         function updateExports(matrix) {
-          asciiOutput.value = formatAscii(matrix);
-          jsonOutput.value = formatJson(matrix);
+          if (!state.asciiEditMode) asciiOutput.value = formatAscii(matrix);
+          if (!state.jsonEditMode) jsonOutput.value = formatJson(matrix);
         }
 
         function findSelectedElement() {
@@ -1158,6 +1276,8 @@
         function captureSnapshot() {
           return {
             mode: state.mode,
+            rows: ROWS,
+            cols: COLS,
             elements: state.elements.map((e) => ({ ...e })),
             panX: state.panX,
             panY: state.panY,
@@ -1170,7 +1290,11 @@
         }
 
         function applySnapshot(snap) {
-          state.mode = snap.mode === 'erase' ? 'erase' : 'draw';
+          if (Number.isInteger(snap.rows) && Number.isInteger(snap.cols) && (snap.rows !== ROWS || snap.cols !== COLS)) {
+            rebuildGrid(snap.rows, snap.cols, { rerenderNow: false, log: false });
+          }
+          const allowedModes = new Set(['draw', 'erase', 'drag', 'resize']);
+          state.mode = allowedModes.has(snap.mode) ? snap.mode : 'draw';
           state.elements = Array.isArray(snap.elements) ? snap.elements.map((e) => ({ ...e })) : [];
           state.panX = Number.isFinite(snap.panX) ? snap.panX : 120;
           state.panY = Number.isFinite(snap.panY) ? snap.panY : 80;
@@ -1274,74 +1398,80 @@
         }
 
         function rerender() {
-          const { matrix: occupancy, owner } = buildOccupancy();
-          const previews = previewSet();
-          const overlapPreview = new Set();
-          if (previews.size && !state.allowOverlap) {
-            previews.forEach((key) => {
-              const [r, c] = key.split('-').map((n) => Number(n));
-              if (occupancy[r - 1]?.[c - 1] && occupancy[r - 1][c - 1] !== '.') {
-                overlapPreview.add(key);
+          try {
+            const { matrix: occupancy, owner } = buildOccupancy();
+            const previews = previewSet();
+            const overlapPreview = new Set();
+            if (previews.size && !state.allowOverlap) {
+              previews.forEach((key) => {
+                const [r, c] = key.split('-').map((n) => Number(n));
+                if (occupancy[r - 1]?.[c - 1] && occupancy[r - 1][c - 1] !== '.') {
+                  overlapPreview.add(key);
+                }
+              });
+            }
+            const hovered = state.hoveredCell ? `${state.hoveredCell.row}-${state.hoveredCell.col}` : null;
+
+            const cells = gridEl.querySelectorAll('.cell');
+            cells.forEach((cellEl) => {
+              const row = Number(cellEl.dataset.row);
+              const col = Number(cellEl.dataset.col);
+              const key = `${row}-${col}`;
+              const code = occupancy[row - 1][col - 1];
+              const ownerId = owner[row - 1][col - 1];
+              const ownerEl = ownerId ? state.elements.find((e) => e.id === ownerId) : null;
+
+              cellEl.textContent = code === '.' ? '' : code;
+              cellEl.classList.toggle('occupied', code !== '.');
+              cellEl.classList.toggle('hover-highlight', state.mode === 'draw' && hovered === key);
+              cellEl.classList.toggle('preview', previews.has(key));
+              cellEl.classList.toggle('overlap', overlapPreview.has(key));
+              cellEl.classList.toggle('selection-rect', previews.has(key) && state.isMouseDrawing);
+              cellEl.classList.toggle('selected', ownerId === state.selectedId || state.selectedIds.includes(ownerId));
+
+              // Apply element color
+              if (ownerEl && ownerEl.color) {
+                cellEl.style.background = code !== '.' ? ownerEl.color : 'transparent';
+              } else if (code !== '.') {
+                cellEl.style.background = 'rgba(164, 160, 196, 0.25)';
+              } else {
+                cellEl.style.background = 'transparent';
               }
             });
-          }
-          const hovered = state.hoveredCell ? `${state.hoveredCell.row}-${state.hoveredCell.col}` : null;
 
-          const cells = gridEl.querySelectorAll('.cell');
-          cells.forEach((cellEl) => {
-            const row = Number(cellEl.dataset.row);
-            const col = Number(cellEl.dataset.col);
-            const key = `${row}-${col}`;
-            const code = occupancy[row - 1][col - 1];
-            const ownerId = owner[row - 1][col - 1];
-            const ownerEl = ownerId ? state.elements.find((e) => e.id === ownerId) : null;
+            canvasRootEl.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
+            drawBtn.classList.toggle('active', state.mode === 'draw');
+            eraseBtn.classList.toggle('active', state.mode === 'erase');
+            dragToolBtn.classList.toggle('active', state.mode === 'drag');
+            resizeToolBtn.classList.toggle('active', state.mode === 'resize');
 
-            cellEl.textContent = code === '.' ? '' : code;
-            cellEl.classList.toggle('occupied', code !== '.');
-            cellEl.classList.toggle('hover-highlight', state.mode === 'draw' && hovered === key);
-            cellEl.classList.toggle('preview', previews.has(key));
-            cellEl.classList.toggle('overlap', overlapPreview.has(key));
-            cellEl.classList.toggle('selected', ownerId === state.selectedId || state.selectedIds.includes(ownerId));
-
-            // Apply element color
-            if (ownerEl && ownerEl.color) {
-              cellEl.style.background = code !== '.' ? ownerEl.color : 'transparent';
-            } else if (code !== '.') {
-              cellEl.style.background = 'rgba(164, 160, 196, 0.25)';
-            } else {
-              cellEl.style.background = 'transparent';
+            let cursor = 'crosshair';
+            if (state.isPanning) {
+              cursor = 'grabbing';
+            } else if (state.mode === 'erase') {
+              cursor = 'not-allowed';
+            } else if (state.mode === 'drag') {
+              cursor = state.isDragging ? 'grabbing' : 'grab';
+            } else if (state.mode === 'resize') {
+              cursor = 'nwse-resize';
             }
-          });
+            viewportEl.style.cursor = cursor;
 
-          canvasRootEl.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.zoom})`;
-          drawBtn.classList.toggle('active', state.mode === 'draw');
-          eraseBtn.classList.toggle('active', state.mode === 'erase');
-          dragToolBtn.classList.toggle('active', state.mode === 'drag');
-          resizeToolBtn.classList.toggle('active', state.mode === 'resize');
-
-          let cursor = 'crosshair';
-          if (state.isPanning) {
-            cursor = 'grabbing';
-          } else if (state.mode === 'erase') {
-            cursor = 'not-allowed';
-          } else if (state.mode === 'drag') {
-            cursor = state.isDragging ? 'grabbing' : 'grab';
-          } else if (state.mode === 'resize') {
-            cursor = 'nwse-resize';
+            undoBtn.disabled = state.history.undo.length === 0;
+            redoBtn.disabled = state.history.redo.length === 0;
+            if (state.dirty.exports) {
+              updateExports(occupancy);
+              state.dirty.exports = false;
+            }
+            if (state.dirty.list) {
+              renderElementsList();
+              state.dirty.list = false;
+            }
+            updateInfoLine();
+          } catch (error) {
+            logMessage(`Error in rerender: ${error.message}`, 'error');
+            console.error('Rerender error:', error);
           }
-          viewportEl.style.cursor = cursor;
-
-          undoBtn.disabled = state.history.undo.length === 0;
-          redoBtn.disabled = state.history.redo.length === 0;
-          if (state.dirty.exports) {
-            updateExports(occupancy);
-            state.dirty.exports = false;
-          }
-          if (state.dirty.list) {
-            renderElementsList();
-            state.dirty.list = false;
-          }
-          updateInfoLine();
         }
 
         function setupGrid() {
@@ -1380,7 +1510,7 @@
           gridEl.style.gridTemplateRows = `40px repeat(${ROWS}, 40px)`;
         }
 
-        function rebuildGrid(newRows, newCols) {
+        function rebuildGrid(newRows, newCols, { rerenderNow = true, log = true } = {}) {
           ROWS = newRows;
           COLS = newCols;
           state.rows = newRows;
@@ -1393,9 +1523,9 @@
           }
 
           setupGrid();
-          markDirty({ exports: true });
-          rerender();
-          logMessage(`Grid resized to ${newRows}x${newCols}`, 'info');
+          markDirty({ exports: true, list: true });
+          if (rerenderNow) rerender();
+          if (log) logMessage(`Grid resized to ${newRows}x${newCols}`, 'info');
         }
 
         function findContainingElementIndex(row, col) {
@@ -1450,20 +1580,11 @@
             return;
           }
           if (state.mode === 'erase') {
-            const idx = findContainingElementIndex(row, col);
-            if (idx !== -1) {
-              pushUndo();
-              state.elements.splice(idx, 1);
-              if (state.selectedId && !state.elements.some((e) => e.id === state.selectedId)) {
-                state.selectedId = null;
-                syncSelectionPanel();
-              }
-              state.selectedIds = state.selectedIds.filter((id) => state.elements.some((e) => e.id === id));
-              markDirty({ exports: true, list: true });
-              rerender();
-              scheduleAutosave();
-              logMessage('Element erased', 'info');
-            }
+            // Start erase rectangle selection
+            state.isMouseDrawing = true;
+            state.drawingStart = { row, col };
+            state.drawingEnd = { row, col };
+            rerender();
             return;
           }
 
@@ -1590,42 +1711,81 @@
 
         function onPointerUpAnywhere() {
           if (state.isMouseDrawing && state.drawingStart && state.drawingEnd) {
-            // Validate title
-            const labelValue = labelInput.value.trim();
-            if (!labelValue) {
-              labelInput.classList.add('input-error');
-              setTimeout(() => labelInput.classList.remove('input-error'), 300);
-              setStatus('Title is required to draw an object');
-              logMessage('Drawing blocked: Title is required', 'warning');
-              state.isMouseDrawing = false;
-              state.drawingStart = null;
-              state.drawingEnd = null;
-              rerender();
-              return;
-            }
-
-            const rect = normalizeRect(state.drawingStart, state.drawingEnd);
-            if (!state.allowOverlap && rectOverlapsAny(rect)) {
-              setStatus('Overlap blocked (toggle Allow Overlap to permit).');
-              logMessage('Drawing blocked: Overlap detected', 'warning');
-            } else {
+            if (state.mode === 'erase') {
+              // Erase mode: delete all cells within the drawn rectangle
+              const rect = normalizeRect(state.drawingStart, state.drawingEnd);
               pushUndo();
-              const newEl = {
-                id: makeId(),
-                label: sanitizeLabel(labelInput.value),
-                code: generateUniqueCode(labelInput.value),
-                color: state.selectedColor,
-                type: state.objectType,
-                notes: '',
-                ...rect
-              };
-              state.elements.push(newEl);
-              state.selectedId = newEl.id;
-              state.selectedIds = [];
+
+              let deletedCount = 0;
+              // Go through all elements and check if they overlap with the erase rect
+              state.elements = state.elements.filter((element) => {
+                // Check if element overlaps with erase rectangle
+                const overlaps = !(
+                  element.endRow < rect.startRow ||
+                  element.startRow > rect.endRow ||
+                  element.endCol < rect.startCol ||
+                  element.startCol > rect.endCol
+                );
+
+                if (overlaps) {
+                  // Element overlaps, so we need to remove overlapping cells
+                  // For simplicity, we'll remove the entire element if any part overlaps
+                  deletedCount++;
+                  return false; // Remove this element
+                }
+                return true; // Keep this element
+              });
+
+              // Clean up selection if needed
+              if (state.selectedId && !state.elements.some((e) => e.id === state.selectedId)) {
+                state.selectedId = null;
+              }
+              state.selectedIds = state.selectedIds.filter((id) => state.elements.some((e) => e.id === id));
+
               syncSelectionPanel();
               markDirty({ exports: true, list: true });
               scheduleAutosave();
-              logMessage(`Element created: ${newEl.label} [${newEl.code}]`, 'info');
+              logMessage(`Erased ${deletedCount} element(s) in selection`, 'info');
+              setStatus(`Erased ${deletedCount} element(s)`);
+            } else {
+              // Draw mode: create new element
+              // Validate title
+              const labelValue = labelInput.value.trim();
+              if (!labelValue) {
+                labelInput.classList.add('input-error');
+                setTimeout(() => labelInput.classList.remove('input-error'), 300);
+                setStatus('Title is required to draw an object');
+                logMessage('Drawing blocked: Title is required', 'warning');
+                state.isMouseDrawing = false;
+                state.drawingStart = null;
+                state.drawingEnd = null;
+                rerender();
+                return;
+              }
+
+              const rect = normalizeRect(state.drawingStart, state.drawingEnd);
+              if (!state.allowOverlap && rectOverlapsAny(rect)) {
+                setStatus('Overlap blocked (toggle Allow Overlap to permit).');
+                logMessage('Drawing blocked: Overlap detected', 'warning');
+              } else {
+                pushUndo();
+                const newEl = {
+                  id: makeId(),
+                  label: sanitizeLabel(labelInput.value),
+                  code: generateUniqueCode(labelInput.value),
+                  color: state.selectedColor,
+                  type: state.objectType,
+                  notes: '',
+                  ...rect
+                };
+                state.elements.push(newEl);
+                state.selectedId = newEl.id;
+                state.selectedIds = [];
+                syncSelectionPanel();
+                markDirty({ exports: true, list: true });
+                scheduleAutosave();
+                logMessage(`Element created: ${newEl.label} [${newEl.code}]`, 'info');
+              }
             }
           }
 
@@ -1886,6 +2046,20 @@
             throw new Error('Invalid YAML structure.');
           }
 
+          const nextRows = Number(payload.canvas?.rows);
+          const nextCols = Number(payload.canvas?.cols);
+          if (
+            Number.isInteger(nextRows) &&
+            Number.isInteger(nextCols) &&
+            nextRows >= 4 &&
+            nextRows <= 64 &&
+            nextCols >= 4 &&
+            nextCols <= 64 &&
+            (nextRows !== ROWS || nextCols !== COLS)
+          ) {
+            rebuildGrid(nextRows, nextCols, { rerenderNow: false });
+          }
+
           const elements = Array.isArray(payload.elements) ? payload.elements : [];
           state.elements = elements
             .map((item) => ({
@@ -1920,7 +2094,8 @@
           state.panX = Number.isFinite(transform.panX) ? transform.panX : 120;
           state.panY = Number.isFinite(transform.panY) ? transform.panY : 80;
           state.zoom = Number.isFinite(transform.zoom) ? Math.min(4, Math.max(0.4, transform.zoom)) : 1;
-          state.mode = payload.ui?.mode === 'erase' ? 'erase' : 'draw';
+          const allowedModes = new Set(['draw', 'erase', 'drag', 'resize']);
+          state.mode = allowedModes.has(payload.ui?.mode) ? payload.ui.mode : 'draw';
           state.allowOverlap = Boolean(payload.ui?.allowOverlap);
           allowOverlapToggle.checked = state.allowOverlap;
           state.wrapExports = payload.ui?.wrapExports !== false;
@@ -1970,21 +2145,38 @@
 
         drawBtn.addEventListener('click', () => {
           state.mode = 'draw';
+          logMessage('Switched to Draw mode', 'info');
           rerender();
         });
 
         eraseBtn.addEventListener('click', () => {
           state.mode = 'erase';
+          logMessage('Switched to Erase mode', 'info');
           rerender();
         });
 
         dragToolBtn.addEventListener('click', () => {
           state.mode = 'drag';
+          logMessage('Switched to Drag mode', 'info');
           rerender();
         });
 
         resizeToolBtn.addEventListener('click', () => {
           state.mode = 'resize';
+          logMessage('Switched to Resize mode', 'info');
+          rerender();
+        });
+
+        // Clear tool buttons
+        clearMouseToolBtn.addEventListener('click', () => {
+          state.mode = 'draw';
+          logMessage('Cleared mouse tool, switched to Draw mode', 'info');
+          rerender();
+        });
+
+        clearDrawToolBtn.addEventListener('click', () => {
+          state.mode = 'draw';
+          logMessage('Cleared draw/erase tool, switched to Draw mode', 'info');
           rerender();
         });
 
@@ -2149,33 +2341,66 @@
         });
 
         fitViewBtn.addEventListener('click', () => {
-          if (state.elements.length === 0) {
-            setStatus('Nothing to fit.');
-            return;
+          try {
+            if (state.elements.length === 0) {
+              setStatus('Nothing to fit.');
+              return;
+            }
+            const minRow = Math.min(...state.elements.map((e) => e.startRow));
+            const minCol = Math.min(...state.elements.map((e) => e.startCol));
+            const maxRow = Math.max(...state.elements.map((e) => e.endRow));
+            const maxCol = Math.max(...state.elements.map((e) => e.endCol));
+
+            const contentW = (maxCol - minCol + 1) * CELL_SIZE;
+            const contentH = (maxRow - minRow + 1) * CELL_SIZE;
+            const contentX = AXIS_SIZE + (minCol - 1) * CELL_SIZE;
+            const contentY = AXIS_SIZE + (minRow - 1) * CELL_SIZE;
+
+            const viewportW = viewportEl.clientWidth || 1;
+            const viewportH = viewportEl.clientHeight || 1;
+            const pad = 60;
+            const scaleX = (viewportW - pad * 2) / contentW;
+            const scaleY = (viewportH - pad * 2) / contentH;
+            const nextZoom = Math.min(4, Math.max(0.4, Math.min(scaleX, scaleY)));
+
+            pushUndo();
+            state.zoom = nextZoom;
+            state.panX = viewportW / 2 - (contentX + contentW / 2) * nextZoom;
+            state.panY = viewportH / 2 - (contentY + contentH / 2) * nextZoom;
+            rerender();
+            scheduleAutosave();
+            logMessage('View fitted to elements', 'info');
+          } catch (error) {
+            logMessage(`Error fitting view: ${error.message}`, 'error');
+            setStatus('Error fitting view');
           }
-          const minRow = Math.min(...state.elements.map((e) => e.startRow));
-          const minCol = Math.min(...state.elements.map((e) => e.startCol));
-          const maxRow = Math.max(...state.elements.map((e) => e.endRow));
-          const maxCol = Math.max(...state.elements.map((e) => e.endCol));
+        });
 
-          const contentW = (maxCol - minCol + 1) * CELL_SIZE;
-          const contentH = (maxRow - minRow + 1) * CELL_SIZE;
-          const contentX = AXIS_SIZE + (minCol - 1) * CELL_SIZE;
-          const contentY = AXIS_SIZE + (minRow - 1) * CELL_SIZE;
+        fitAllBtn.addEventListener('click', () => {
+          try {
+            // Fit to show entire grid with all elements
+            const gridW = AXIS_SIZE + COLS * CELL_SIZE;
+            const gridH = AXIS_SIZE + ROWS * CELL_SIZE;
 
-          const viewportW = viewportEl.clientWidth || 1;
-          const viewportH = viewportEl.clientHeight || 1;
-          const pad = 60;
-          const scaleX = (viewportW - pad * 2) / contentW;
-          const scaleY = (viewportH - pad * 2) / contentH;
-          const nextZoom = Math.min(4, Math.max(0.4, Math.min(scaleX, scaleY)));
+            const viewportW = viewportEl.clientWidth || 1;
+            const viewportH = viewportEl.clientHeight || 1;
+            const pad = 40;
+            const scaleX = (viewportW - pad * 2) / gridW;
+            const scaleY = (viewportH - pad * 2) / gridH;
+            const nextZoom = Math.min(2, Math.max(0.2, Math.min(scaleX, scaleY)));
 
-          pushUndo();
-          state.zoom = nextZoom;
-          state.panX = viewportW / 2 - (contentX + contentW / 2) * nextZoom;
-          state.panY = viewportH / 2 - (contentY + contentH / 2) * nextZoom;
-          rerender();
-          scheduleAutosave();
+            pushUndo();
+            state.zoom = nextZoom;
+            state.panX = (viewportW - gridW * nextZoom) / 2;
+            state.panY = (viewportH - gridH * nextZoom) / 2;
+            rerender();
+            scheduleAutosave();
+            logMessage('View fitted to entire grid', 'info');
+            setStatus('Fitted to entire grid');
+          } catch (error) {
+            logMessage(`Error fitting all: ${error.message}`, 'error');
+            setStatus('Error fitting to grid');
+          }
         });
 
         selectedLabelInput.addEventListener('change', () => {
@@ -2751,7 +2976,11 @@
             event.target?.isContentEditable ||
             event.target === labelInput ||
 	            event.target === selectedLabelInput ||
-	            event.target === selectedCodeInput;
+	            event.target === selectedCodeInput ||
+	            event.target === elementNotesInput ||
+	            event.target === elementSearchInput ||
+	            event.target === asciiOutput ||
+	            event.target === jsonOutput;
 
 	          if (event.key === 'Escape') {
 	            let closedOverlay = false;
@@ -2882,7 +3111,7 @@
             rerender();
             return;
           }
-          if (event.key === 'Delete' || event.key === 'Backspace') {
+          if ((event.key === 'Delete' || event.key === 'Backspace') && !isEditable) {
             const selected = findSelectedElement();
             if (selected) {
               event.preventDefault();
@@ -2890,20 +3119,25 @@
             }
             return;
           }
-          if (!event.ctrlKey && !event.metaKey) {
+          if (!event.ctrlKey && !event.metaKey && !isEditable) {
             if (event.key.toLowerCase() === 'd') {
+              event.preventDefault();
               state.mode = 'draw';
+              logMessage('Switched to Draw mode (hotkey)', 'info');
               rerender();
               return;
             }
             if (event.key.toLowerCase() === 'e') {
+              event.preventDefault();
               state.mode = 'erase';
+              logMessage('Switched to Erase mode (hotkey)', 'info');
               rerender();
               return;
             }
             if (event.key.toLowerCase() === 'h' || event.key === '?') {
               event.preventDefault();
               helpModal.style.display = 'flex';
+              logMessage('Help modal opened', 'info');
               return;
             }
           }
@@ -2971,10 +3205,145 @@
           try {
             await copyText(jsonOutput.value);
             setStatus('JSON copied.');
+            logMessage('JSON copied to clipboard', 'info');
           } catch (error) {
             setStatus('Copy failed.');
+            logMessage(`JSON copy failed: ${error.message}`, 'error');
           }
         });
+
+        // ASCII Edit Toggle
+        editAsciiBtn.addEventListener('click', () => {
+          state.asciiEditMode = !state.asciiEditMode;
+          asciiOutput.readOnly = !state.asciiEditMode;
+          editAsciiBtn.classList.toggle('active', state.asciiEditMode);
+          asciiOutput.classList.toggle('textarea-readonly', !state.asciiEditMode);
+          asciiErrorMsg.style.display = 'none';
+          if (state.asciiEditMode) {
+            asciiOutput.value = unwrapCodeFence(asciiOutput.value);
+            logMessage('ASCII edit mode enabled (copy-only)', 'info');
+            setStatus('ASCII edit mode ON (copy-only)');
+          } else {
+            logMessage('ASCII edit mode disabled (changes not applied)', 'info');
+            setStatus('ASCII edit mode OFF');
+            markDirty({ exports: true });
+            rerender();
+          }
+        });
+
+        // JSON Edit Toggle
+        editJsonBtn.addEventListener('click', () => {
+          state.jsonEditMode = !state.jsonEditMode;
+          jsonOutput.readOnly = !state.jsonEditMode;
+          editJsonBtn.classList.toggle('active', state.jsonEditMode);
+          jsonOutput.classList.toggle('textarea-readonly', !state.jsonEditMode);
+          jsonErrorMsg.style.display = 'none';
+          if (state.jsonEditMode) {
+            jsonOutput.value = unwrapCodeFence(jsonOutput.value);
+            logMessage('JSON edit mode enabled', 'info');
+            setStatus('JSON edit mode ON - edit and save to apply');
+          } else {
+            // Save/validate when toggling off
+            try {
+              validateAndApplyJsonEdit();
+              logMessage('JSON edit mode disabled and changes applied', 'info');
+              setStatus('JSON changes applied');
+            } catch (error) {
+              logMessage(`JSON validation failed: ${error.message}`, 'error');
+              jsonErrorMsg.textContent = `Error: ${error.message}`;
+              jsonErrorMsg.style.display = 'block';
+              jsonOutput.classList.add('input-error');
+              setTimeout(() => jsonOutput.classList.remove('input-error'), 300);
+              // Re-enable edit mode since validation failed
+              state.jsonEditMode = true;
+              jsonOutput.readOnly = false;
+              editJsonBtn.classList.add('active');
+              jsonOutput.classList.remove('textarea-readonly');
+            }
+          }
+        });
+
+        function validateAndApplyJsonEdit() {
+          try {
+            const parsed = JSON.parse(unwrapCodeFence(jsonOutput.value));
+
+            // Validate structure
+            if (!parsed || typeof parsed !== 'object') {
+              throw new Error('Invalid JSON format');
+            }
+            if (!Array.isArray(parsed.elements)) {
+              throw new Error('Missing or invalid "elements" array');
+            }
+
+            const targetRows = Number.isFinite(Number(parsed.rows)) ? Number(parsed.rows) : ROWS;
+            const targetCols = Number.isFinite(Number(parsed.cols)) ? Number(parsed.cols) : COLS;
+            if (
+              !Number.isInteger(targetRows) ||
+              !Number.isInteger(targetCols) ||
+              targetRows < 4 ||
+              targetRows > 64 ||
+              targetCols < 4 ||
+              targetCols > 64
+            ) {
+              throw new Error('Invalid or out-of-range "rows"/"cols" (must be integers 4-64)');
+            }
+
+            const nextElements = parsed.elements.map((el, idx) => {
+              if (!el || typeof el !== 'object') {
+                throw new Error(`Element ${idx} is not an object`);
+              }
+              const id = String(el.id || '').trim();
+              const label = sanitizeLabel(el.label);
+              const code = String(el.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 2);
+              if (!id || !label || code.length !== 2) {
+                throw new Error(`Element ${idx} missing required fields (id, label, code)`);
+              }
+
+              const startRow = Number(el.startRow);
+              const endRow = Number(el.endRow);
+              const startCol = Number(el.startCol);
+              const endCol = Number(el.endCol);
+              if (![startRow, endRow, startCol, endCol].every(Number.isInteger)) {
+                throw new Error(`Element ${idx} has invalid bounds (must be integers)`);
+              }
+              if (startRow < 1 || endRow > targetRows || startCol < 1 || endCol > targetCols) {
+                throw new Error(`Element ${idx} bounds out of range`);
+              }
+              if (startRow > endRow || startCol > endCol) {
+                throw new Error(`Element ${idx} bounds are inverted`);
+              }
+
+              return {
+                id,
+                label,
+                code,
+                startRow,
+                endRow,
+                startCol,
+                endCol,
+                color: el.color || COLOR_PALETTE[0].value,
+                type: el.type || 'Web-Object',
+                notes: el.notes || ''
+              };
+            });
+
+            // Apply changes
+            pushUndo();
+            if (targetRows !== ROWS || targetCols !== COLS) {
+              rebuildGrid(targetRows, targetCols, { rerenderNow: false });
+            }
+            state.elements = nextElements;
+            state.selectedId = null;
+            state.selectedIds = [];
+            syncSelectionPanel();
+            markDirty({ exports: true, list: true });
+            rerender();
+            scheduleAutosave();
+            logMessage(`Applied JSON changes: ${nextElements.length} elements`, 'info');
+          } catch (error) {
+            throw new Error(`JSON validation failed: ${error.message}`);
+          }
+        }
 
         function tryLoadAutosave() {
           try {
